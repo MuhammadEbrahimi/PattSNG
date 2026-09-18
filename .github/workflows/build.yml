@@ -31,6 +31,43 @@ jobs:
         submodules: 'recursive'
         fetch-depth: '0'
 
+    # Diagnostic first, repair second. "submodules: recursive" above only checks out paths
+    # that are registered as gitlinks (mode 160000) in the commit being built; a .gitmodules
+    # file on its own does nothing. If the sources did not arrive, they are cloned here so
+    # the build does not depend on how the submodules were committed.
+    - name: Prepare native sources
+      env:
+        GIT_TERMINAL_PROMPT: '0'
+        GCM_INTERACTIVE: 'never'
+      run: |
+        set -euo pipefail
+
+        echo "::group::submodule status"
+        git submodule status || echo "(git submodule status failed)"
+        git ls-files -s hev-socks5-tunnel aether AndroidLibXrayLite || true
+        echo "::endgroup::"
+
+        fetch_repo () {
+          local dir="$1" repo="$2" marker="$3"
+          if [ -f "$dir/$marker" ]; then
+            echo "$dir: already present"
+          else
+            echo "$dir: missing $marker, cloning $repo"
+            rm -rf "$dir"
+            git clone --filter=blob:none --recurse-submodules --shallow-submodules "$repo" "$dir"
+          fi
+          echo "$dir at $(git -C "$dir" rev-parse HEAD)"
+        }
+
+        fetch_repo hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel.git third-part/lwip/Android.mk
+        fetch_repo aether https://github.com/CluvexStudio/aether.git aether/Cargo.toml
+        fetch_repo AndroidLibXrayLite https://github.com/patterniha/AndroidLibXrayLite.git go.mod
+
+        # The cache keys used to hash .git/modules/<name>/HEAD, which only exists for a real
+        # submodule checkout. The resolved commit works for both cases.
+        echo "HEVTUN_SHA=$(git -C hev-socks5-tunnel rev-parse HEAD)" >> $GITHUB_ENV
+        echo "AETHER_SHA=$(git -C aether rev-parse HEAD)" >> $GITHUB_ENV
+
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
       with:
@@ -58,7 +95,7 @@ jobs:
       uses: actions/cache/restore@v6
       with:
         path: libs
-        key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
+        key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
 
     # No "if:" here: a step that is skipped by a cache hit which restored nothing usable
     # only shows up as a failure much later, in the copy step. The check below looks at the
@@ -83,7 +120,7 @@ jobs:
       uses: actions/cache/save@v6
       with:
         path: libs
-        key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
+        key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -96,7 +133,7 @@ jobs:
       uses: actions/cache/restore@v6
       with:
         path: libs-aether
-        key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('.git/modules/aether/HEAD') }}-${{ hashFiles('compile-aether.sh') }}
+        key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
 
     - name: Build libaether
       id: libaether
@@ -118,7 +155,7 @@ jobs:
       uses: actions/cache/save@v6
       with:
         path: libs-aether
-        key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('.git/modules/aether/HEAD') }}-${{ hashFiles('compile-aether.sh') }}
+        key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
 
     - name: Copy libhevtun
       run: |
