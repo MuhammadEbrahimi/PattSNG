@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
+        description: 'Release tag (optional)'
         required: false
         type: string
   push:
@@ -19,34 +20,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # The stable release aether's own release workflow built with; pinned so a new stable
-      # release cannot change or break the release build on its own. Bump it together with
-      # the aether submodule.
       RUST_TOOLCHAIN: "1.98.1"
-
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@v4
       with:
         submodules: 'recursive'
         fetch-depth: '0'
 
-    # Diagnostic first, repair second. "submodules: recursive" above only checks out paths
-    # that are registered as gitlinks (mode 160000) in the commit being built; a .gitmodules
-    # file on its own does nothing. If the sources did not arrive, they are cloned here so
-    # the build does not depend on how the submodules were committed.
     - name: Prepare native sources
       env:
         GIT_TERMINAL_PROMPT: '0'
         GCM_INTERACTIVE: 'never'
       run: |
         set -euo pipefail
-
         echo "::group::submodule status"
         git submodule status || echo "(git submodule status failed)"
         git ls-files -s hev-socks5-tunnel aether AndroidLibXrayLite || true
         echo "::endgroup::"
-
         fetch_repo () {
           local dir="$1" repo="$2" marker="$3"
           if [ -f "$dir/$marker" ]; then
@@ -58,18 +49,14 @@ jobs:
           fi
           echo "$dir at $(git -C "$dir" rev-parse HEAD)"
         }
-
         fetch_repo hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel.git third-part/lwip/Android.mk
         fetch_repo aether https://github.com/CluvexStudio/aether.git aether/Cargo.toml
         fetch_repo AndroidLibXrayLite https://github.com/patterniha/AndroidLibXrayLite.git go.mod
-
-        # The cache keys used to hash .git/modules/<name>/HEAD, which only exists for a real
-        # submodule checkout. The resolved commit works for both cases.
         echo "HEVTUN_SHA=$(git -C hev-socks5-tunnel rev-parse HEAD)" >> $GITHUB_ENV
         echo "AETHER_SHA=$(git -C aether rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v4
+      uses: android-actions/setup-android@v3
       with:
         log-accepted-android-sdk-licenses: false
         cmdline-tools-version: '14742923'
@@ -81,25 +68,15 @@ jobs:
           --channel=0 \
           --install "ndk;29.0.14206865"
         echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
-        sed -i '10i\
-        \
-            ndkVersion = "29.0.14206865"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
+        sed -i '10i\        ndkVersion = "29.0.14206865"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
 
-    # The cache path is relative on purpose. With an absolute path actions/cache archives
-    # with "tar -P", so the entry carries /home/runner/work/<repo>/<repo> inside it and
-    # after a repository rename it still restores "successfully" but unpacks under the old
-    # path, leaving the workspace empty. The -v2 in the key drops the entries that were
-    # already saved that way.
     - name: Restore cached libhevtun
       id: cache-libhevtun-restore
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@v4
       with:
         path: libs
         key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
 
-    # No "if:" here: a step that is skipped by a cache hit which restored nothing usable
-    # only shows up as a failure much later, in the copy step. The check below looks at the
-    # files that are actually on disk instead.
     - name: Build libhevtun
       id: libhevtun
       run: |
@@ -117,7 +94,7 @@ jobs:
 
     - name: Save libhevtun
       if: steps.libhevtun.outputs.built == 'true' && steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@v4
       with:
         path: libs
         key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
@@ -130,7 +107,7 @@ jobs:
 
     - name: Restore cached libaether
       id: cache-libaether-restore
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@v4
       with:
         path: libs-aether
         key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
@@ -152,7 +129,7 @@ jobs:
 
     - name: Save libaether
       if: steps.libaether.outputs.built == 'true' && steps.cache-libaether-restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@v4
       with:
         path: libs-aether
         key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
@@ -174,7 +151,7 @@ jobs:
         popd
 
     - name: Download libv2ray
-      uses: robinraju/release-downloader@v1.13
+      uses: robinraju/release-downloader@v1.11
       with:
         repository: 'patterniha/AndroidLibXrayLite'
         tag: ${{ env.CURRENT_TAG }}
@@ -182,13 +159,13 @@ jobs:
         out-file-path: V2rayNG/app/libs/
 
     - name: Setup Java
-      uses: actions/setup-java@v6.0.0
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '21'
 
     - name: Decode Keystore
-      uses: timheuer/base64-to-file@v2.0.0
+      uses: timheuer/base64-to-file@v1.2
       id: android_keystore
       with:
         fileName: "android_keystore.jks"
@@ -199,72 +176,63 @@ jobs:
         cd ${{ github.workspace }}/V2rayNG
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
-        # The JVM unit tests are the only automated check of the Kotlin logic; a failure stops the
-        # build before anything is assembled or signed.
         ./gradlew :app:testPlaystoreDebugUnitTest
         ./gradlew licenseFdroidReleaseReport
-        ./gradlew assembleRelease -PpattngVersion="${{ inputs.release_tag }}" -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
-    
+        ./gradlew assembleRelease -PpattngVersion="${{ inputs.release_tag }}" \
+          -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} \
+          -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} \
+          -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} \
+          -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
+
     - name: Upload arm64-v8a APK
-      uses: actions/upload-artifact@v7
-      if: ${{  success() }}
+      uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: arm64-v8a
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
     - name: Upload armeabi-v7a APK
-      uses: actions/upload-artifact@v7
-      if: ${{  success() }}
+      uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: armeabi-v7a
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
 
     - name: Upload x86 APK
-      uses: actions/upload-artifact@v7
-      if: ${{  success() }}
+      uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: x86-apk
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
 
     - name: Upload universal APK
-      uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: universal-apk
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*universal*.apk
 
-  sign-and-release:
+  release:
     needs: build
-    runs-on: ubuntu-26.04
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
-
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/my-releases' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Download APK artifacts
-        uses: actions/download-artifact@v8
+      - name: Download all APK artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: release
+          path: apks
 
-      - name: Sign APK files
+      - name: Collect APK files
         run: |
-          printf '%s' "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
-          mkdir -p release-files
+          mkdir -p release-assets
+          find apks -type f -name '*.apk' -exec cp {} release-assets/ \;
+          ls -lh release-assets/
 
-          find release -type f -name '*.apk' | while read apk; do
-            cp "$apk" release-files/
-            gpg --batch --yes --local-user "$KEY" --detach-sign --output "release-files/$(basename "$apk").sig" "$apk"
-          done
-
-          gpg --armor --export "$KEY" > release-files/PattNG-public-key.asc
-
-      - name: Upload APKs, signatures and public key to release
-        uses: svenstaro/upload-release-action@v2
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          file: release-files/*
-          tag: ${{ inputs.release_tag }}
-          release_name: PattNG v${{ inputs.release_tag }}
-          body: "."
-          target_commit: ${{ github.sha }}
-          file_glob: true
-          prerelease: true
-          overwrite: true
+          tag_name: ${{ inputs.release_tag != '' && inputs.release_tag || 'continuous' }}
+          name: ${{ inputs.release_tag != '' && format('PattNG v{0}', inputs.release_tag) || 'PattNG Continuous Build' }}
+          draft: false
+          prerelease: false
+          files: release-assets/*.apk
