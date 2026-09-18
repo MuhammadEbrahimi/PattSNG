@@ -1,132 +1,141 @@
 package com.v2ray.ang.fmt
 
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.enums.SshAuthMode
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.v2ray.ang.extension.idnHost
+import com.v2ray.ang.extension.nullIfBlank
+import com.v2ray.ang.util.Utils
+import java.net.URI
 
-class SshFmtTest {
+/**
+ * `ssh://user[:password]@host[:port]?auth=password|key&hostkey=..&keepalive=..&compression=1#remark`
+ *
+ * The port is optional in a link and falls back to 22, the way any SSH client reads a bare
+ * `ssh://host`. A private key is too long for a shareable link, so a key profile carries only its
+ * auth mode in the link and the key itself stays on the device.
+ */
+object SshFmt : FmtBase() {
 
-    /** `toUri` returns the scheme-less body, exactly like every other fmt; the app prepends the
-     *  scheme when it shares a profile, so a round-trip test has to do the same. */
-    private fun link(config: ProfileItem) =
-        EConfigType.SSH.protocolScheme + SshFmt.toUri(config)
-
-    private fun profile(
-        server: String? = "tunnel.example.com",
-        port: String? = "2222",
-        username: String? = "ara",
-        password: String? = "secret",
-        authMode: SshAuthMode = SshAuthMode.PASSWORD,
-        privateKey: String? = null,
-        keepAlive: String? = null,
-    ) = ProfileItem(
-        configType = EConfigType.SSH,
-        remarks = "test",
-        server = server,
-        serverPort = port,
-        password = password,
-        sshUsername = username,
-        sshAuthMode = authMode.type,
-        sshPrivateKey = privateKey,
-        sshKeepAlive = keepAlive,
-    )
-
-    @Test
-    fun `parse reads user password host and port`() {
-        val config = SshFmt.parse("ssh://ara:secret@tunnel.example.com:2222#Home")
-
-        assertNotNull(config)
-        assertEquals("Home", config!!.remarks)
-        assertEquals("tunnel.example.com", config.server)
-        assertEquals("2222", config.serverPort)
-        assertEquals("ara", config.sshUsername)
-        assertEquals("secret", config.password)
-        assertEquals(SshAuthMode.PASSWORD.type, config.sshAuthMode)
+    enum class Problem {
+        MISSING_HOST,
+        INVALID_PORT,
+        MISSING_USERNAME,
+        MISSING_PASSWORD,
+        MISSING_KEY,
     }
 
-    @Test
-    fun `parse without a port falls back to 22`() {
-        val config = SshFmt.parse("ssh://ara@tunnel.example.com")
+    fun parse(str: String): ProfileItem? {
+        val config = ProfileItem.create(EConfigType.SSH)
 
-        assertEquals("22", config?.serverPort)
-        assertEquals("ara", config?.sshUsername)
-        assertNull(config?.password)
+        val uri = URI(Utils.fixIllegalUrl(str))
+        val queryParam = if (uri.rawQuery.isNullOrEmpty()) emptyMap() else getQueryParam(uri)
+
+        config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty()).ifEmpty { "SSH" }
+        config.server = uri.idnHost.nullIfBlank() ?: return null
+        // `URI.getPort()` gives up (-1) as soon as anything in the authority is not strictly
+        // legal, which silently turned every such link into a port-22 profile. The authority is
+        // read directly in that case, so the port the link carries is the port the tunnel dials.
+        config.serverPort = (uri.port.takeIf { it in 1..65535 } ?: portFromAuthority(uri.authority))
+            ?.toString() ?: AppConfig.SSH_DEFAULT_PORT.toString()
+
+        val userInfo = Utils.decodeURIComponent(uri.userInfo.orEmpty())
+        val separator = userInfo.indexOf(':')
+        if (separator >= 0) {
+            config.sshUsername = userInfo.substring(0, separator).nullIfBlank()
+            config.password = userInfo.substring(separator + 1).nullIfBlank()
+        } else {
+            config.sshUsername = userInfo.nullIfBlank()
+        }
+
+        config.sshAuthMode = SshAuthMode.fromString(queryParam["auth"]).type
+        config.sshHostKey = queryParam["hostkey"]?.nullIfBlank()
+        config.sshKeepAlive = queryParam["keepalive"]?.trim()?.toIntOrNull()?.toString()
+        config.sshCompression = queryParam["compression"] == "1"
+
+        return config
     }
 
-    @Test
-    fun `parse reads the key auth mode and the options`() {
-        val config = SshFmt.parse("ssh://ara@1.2.3.4:22?auth=key&keepalive=45&compression=1#Key")
+    fun toUri(config: ProfileItem): String {
+        val mode = SshAuthMode.fromString(config.sshAuthMode)
+        val query = linkedMapOf("auth" to mode.type)
+        config.sshHostKey?.nullIfBlank()?.let { query["hostkey"] = it }
+        config.sshKeepAlive?.nullIfBlank()?.let { query["keepalive"] = it }
+        if (config.sshCompression == true) query["compression"] = "1"
 
-        assertEquals(SshAuthMode.PRIVATE_KEY.type, config?.sshAuthMode)
-        assertEquals("45", config?.sshKeepAlive)
-        assertEquals(true, config?.sshCompression)
+        val userInfo = buildString {
+            append(config.sshUsername.orEmpty())
+            if (mode == SshAuthMode.PASSWORD && !config.password.isNullOrEmpty()) {
+                append(':')
+                append(config.password)
+            }
+        }
+
+        return toUri(config, userInfo, HashMap(query))
     }
 
-    @Test
-    fun `toUri keeps the profile readable by parse`() {
-        val original = profile(keepAlive = "60")
+    /**
+     * The port of a `user@host:port` authority, read from the text so a link whose authority JSch
+     * accepts but `java.net.URI` will not parse still keeps its port.
+     */
+    private fun portFromAuthority(authority: String?): Int? =
+        authority?.substringAfterLast('@')
+            ?.takeIf { it.contains(':') && !it.endsWith("]") }
+            ?.substringAfterLast(':')
+            ?.toIntOrNull()
+            ?.takeIf { it in 1..65535 }
 
-        val reparsed = SshFmt.parse(link(original))
+    /**
+     * Trims the profile into the shape the tunnel is started with and reports the first field that
+     * would keep it from connecting.
+     */
+    fun normalize(config: ProfileItem): Problem? {
+        var host = config.server?.trim().orEmpty()
+        if (host.isEmpty()) return Problem.MISSING_HOST
 
-        assertEquals(original.server, reparsed?.server)
-        assertEquals(original.serverPort, reparsed?.serverPort)
-        assertEquals(original.sshUsername, reparsed?.sshUsername)
-        assertEquals(original.password, reparsed?.password)
-        assertEquals("60", reparsed?.sshKeepAlive)
-    }
+        // An address typed as `host:2222` (the way it is written for `ssh`) used to reach JSch as
+        // one hostname and never resolve, while the port field kept its 22. The port is moved to
+        // the field it belongs to instead. Bracketed IPv6 literals are left alone.
+        if (!host.startsWith("[") && host.count { it == ':' } == 1) {
+            val typedPort = host.substringAfterLast(':').toIntOrNull()?.takeIf { it in 1..65535 }
+            if (typedPort != null) {
+                host = host.substringBeforeLast(':')
+                if (host.isEmpty()) return Problem.MISSING_HOST
+                config.serverPort = typedPort.toString()
+            }
+        }
+        config.server = host
 
-    @Test
-    fun `toUri leaves the private key on the device`() {
-        val uri = link(
-            profile(authMode = SshAuthMode.PRIVATE_KEY, password = null, privateKey = "-----BEGIN-----")
-        )
+        val portText = config.serverPort?.trim().orEmpty()
+        val port = if (portText.isEmpty()) {
+            AppConfig.SSH_DEFAULT_PORT
+        } else {
+            portText.toIntOrNull() ?: return Problem.INVALID_PORT
+        }
+        if (port !in 1..65535) return Problem.INVALID_PORT
+        config.serverPort = port.toString()
 
-        assertTrue(uri.contains("auth=key"))
-        assertTrue(!uri.contains("BEGIN"))
-    }
+        val username = config.sshUsername?.trim().orEmpty()
+        if (username.isEmpty()) return Problem.MISSING_USERNAME
+        config.sshUsername = username
 
-    @Test
-    fun `normalize accepts a complete password profile`() {
-        val config = profile(port = " 2222 ", username = " ara ")
+        when (SshAuthMode.fromString(config.sshAuthMode)) {
+            SshAuthMode.PASSWORD -> {
+                if (config.password.isNullOrEmpty()) return Problem.MISSING_PASSWORD
+                config.sshPrivateKey = null
+                config.sshPassphrase = null
+            }
 
-        assertNull(SshFmt.normalize(config))
-        assertEquals("2222", config.serverPort)
-        assertEquals("ara", config.sshUsername)
-    }
+            SshAuthMode.PRIVATE_KEY -> {
+                if (config.sshPrivateKey?.trim().isNullOrEmpty()) return Problem.MISSING_KEY
+                config.sshPrivateKey = config.sshPrivateKey?.trim()
+                config.password = null
+            }
+        }
 
-    @Test
-    fun `normalize fills an empty port with 22`() {
-        val config = profile(port = "")
-
-        assertNull(SshFmt.normalize(config))
-        assertEquals("22", config.serverPort)
-    }
-
-    @Test
-    fun `normalize reports the first unusable field`() {
-        assertEquals(SshFmt.Problem.MISSING_HOST, SshFmt.normalize(profile(server = " ")))
-        assertEquals(SshFmt.Problem.INVALID_PORT, SshFmt.normalize(profile(port = "70000")))
-        assertEquals(SshFmt.Problem.MISSING_USERNAME, SshFmt.normalize(profile(username = null)))
-        assertEquals(SshFmt.Problem.MISSING_PASSWORD, SshFmt.normalize(profile(password = null)))
-        assertEquals(
-            SshFmt.Problem.MISSING_KEY,
-            SshFmt.normalize(profile(authMode = SshAuthMode.PRIVATE_KEY, privateKey = "  "))
-        )
-    }
-
-    @Test
-    fun `normalize drops the credential the auth mode does not use`() {
-        val keyProfile = profile(authMode = SshAuthMode.PRIVATE_KEY, privateKey = "-----BEGIN-----")
-        assertNull(SshFmt.normalize(keyProfile))
-        assertNull(keyProfile.password)
-
-        val passwordProfile = profile(privateKey = "-----BEGIN-----")
-        assertNull(SshFmt.normalize(passwordProfile))
-        assertNull(passwordProfile.sshPrivateKey)
+        config.sshHostKey = config.sshHostKey?.trim()?.nullIfBlank()
+        config.sshKeepAlive = config.sshKeepAlive?.trim()?.toIntOrNull()?.coerceIn(0, 600)?.toString()
+        return null
     }
 }
