@@ -15,7 +15,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Setup Java
@@ -24,30 +23,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-          add-to-path: true
-
-      - name: Prepare and Clone Submodules for hevtun
-        run: |
-          rm -rf hev-socks5-tunnel
-          git clone --recursive https://github.com/eycorsican/hev-socks5-tunnel.git hev-socks5-tunnel
-          cd hev-socks5-tunnel
-          git submodule update --init --recursive
-          cd ..
-
-      - name: Compile hevtun
-        run: |
-          export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-          export NDK_HOME=$ANDROID_NDK_ROOT
-          bash compile-hevtun.sh
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build APK
+      - name: Build with Gradle
         run: |
           cd V2rayNG
           chmod +x gradlew
@@ -57,4 +36,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: V2rayNG/app/build/outputs/apk/release/*.apk
+          path: V2rayNG/app/build/outputs/apk/**/*.apk
