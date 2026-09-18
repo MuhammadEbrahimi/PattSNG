@@ -31,7 +31,7 @@ import kotlin.math.abs
  */
 object MotionTokens {
     /** Feedback that must feel instant: presses, ripples, tiny colour shifts. */
-    const val QUICK_MS = 110
+    const val QUICK_MS = 140
 
     /** The default: selection changes, colour and size transitions. */
     const val STANDARD_MS = 260
@@ -43,22 +43,22 @@ object MotionTokens {
     const val PULSE_MS = 2_400
 
     /** One full turn of the orbiting ring around the connect button. */
-    const val ORBIT_MS = 5_600
+    const val ORBIT_MS = 4_200
 
     /** Stagger between consecutive list items on first paint. */
     const val STAGGER_MS = 34
 
     /** Longest stagger delay, so long lists never feel slow. */
-    const val STAGGER_MAX_MS = 280
+    const val STAGGER_MAX_MS = 320
 
     /**
-     * Fast out, slow in - motion leaves immediately and eases into place. This is what makes the
-     * animations read as deliberate rather than bouncy.
+     * Expo-out: motion leaves immediately and glides a long way into place. This is the single
+     * biggest reason the new UI feels heavier and more cinematic than the old one.
      */
     val easing: Easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
-    /** Sharper curve for press feedback and other micro-interactions. */
-    val quickEasing: Easing = CubicBezierEasing(0.3f, 0f, 0.2f, 1f)
+    /** A snappier curve for press feedback, where a long glide would feel laggy. */
+    val quickEasing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 }
 
 /** The app's standard tween. Use this instead of hand-written specs. */
@@ -84,7 +84,7 @@ fun <T> appTween(
 @Composable
 fun Modifier.pressScale(
     interactionSource: InteractionSource,
-    pressedScale: Float = 0.97f,
+    pressedScale: Float = 0.96f,
 ): Modifier {
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(

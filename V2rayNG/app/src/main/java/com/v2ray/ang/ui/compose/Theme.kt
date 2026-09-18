@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -33,107 +34,107 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * PattNG visual identity.
- *
- * Only colour, shape and type live here. No behaviour, no state, no navigation - swapping this
- * file changes how the app looks and nothing about how it works.
- */
-
-private val BrandAmber = Color(0xFFFF7A18) // signature accent
-private val BrandTeal = Color(0xFF00C08B) // healthy / connected
-private val BrandViolet = Color(0xFF7C5CFF) // secondary emphasis
+// ---------------------------------------------------------------------------
+// Brand palette
+// ---------------------------------------------------------------------------
+// Amber is the action colour, Teal means "healthy", Violet is the cool accent used by
+// containers and highlights. These three are never overridden - not even by Dynamic Color -
+// so the app always looks like itself.
+private val BrandAmber = Color(0xFFFF7A18)
+private val BrandTeal = Color(0xFF00C08B)
+private val BrandViolet = Color(0xFF7C5CFF)
 
 private val LightColor = lightColorScheme(
-    primary = Color(0xFF111114),
+    primary = Color(0xFF12121A),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE6E6EC),
-    onPrimaryContainer = Color(0xFF111114),
+    primaryContainer = Color(0xFFE9E7F5),
+    onPrimaryContainer = Color(0xFF12121A),
     secondary = BrandAmber,
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFFFE6D2),
     onSecondaryContainer = Color(0xFF3A1600),
-    tertiary = BrandViolet,
+    tertiary = BrandTeal,
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFE6DEFF),
-    onTertiaryContainer = Color(0xFF1B0F52),
-    error = Color(0xFFC4162B),
-    errorContainer = Color(0xFFFFDAD9),
+    tertiaryContainer = Color(0xFFBFF3E2),
+    onTertiaryContainer = Color(0xFF00241B),
+    error = Color(0xFFD5003C),
+    errorContainer = Color(0xFFFFDAE2),
     onError = Color(0xFFFFFFFF),
-    onErrorContainer = Color(0xFF410006),
-    background = Color(0xFFFAFAFC),
-    onBackground = Color(0xFF14141A),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF14141A),
-    surfaceVariant = Color(0xFFE9E9F1),
-    onSurfaceVariant = Color(0xFF4A4A56),
-    outline = Color(0xFF7B7B87),
-    outlineVariant = Color(0xFFD3D3DE),
-    inverseSurface = Color(0xFF26262C),
-    inverseOnSurface = Color(0xFFF3F3F7),
-    inversePrimary = Color(0xFFC7C7D1),
+    onErrorContainer = Color(0xFF3F0013),
+    background = Color(0xFFF6F5FA),
+    onBackground = Color(0xFF12121A),
+    surface = Color(0xFFF6F5FA),
+    onSurface = Color(0xFF12121A),
+    surfaceVariant = Color(0xFFE7E5F0),
+    onSurfaceVariant = Color(0xFF55525F),
+    outline = Color(0xFF8B8896),
+    outlineVariant = Color(0xFFD5D2DF),
+    inverseSurface = Color(0xFF1B1A22),
+    inverseOnSurface = Color(0xFFF2F0F7),
+    inversePrimary = Color(0xFFCFCBDC),
     scrim = Color(0xFF000000),
-    surfaceTint = BrandAmber,
+    surfaceTint = BrandViolet,
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF6F6FA),
-    surfaceContainer = Color(0xFFF0F0F6),
-    surfaceContainerHigh = Color(0xFFE9E9F1),
-    surfaceContainerHighest = Color(0xFFE2E2EC),
+    surfaceContainerLow = Color(0xFFFAF9FD),
+    surfaceContainer = Color(0xFFF1EFF7),
+    surfaceContainerHigh = Color(0xFFEAE8F2),
+    surfaceContainerHighest = Color(0xFFE3E0ED),
 )
 
 private val DarkColor = darkColorScheme(
-    primary = Color(0xFFE8E8F2),
-    onPrimary = Color(0xFF17171D),
-    primaryContainer = Color(0xFF34343E),
-    onPrimaryContainer = Color(0xFFE8E8F2),
+    primary = Color(0xFFEDEBF5),
+    onPrimary = Color(0xFF15141B),
+    primaryContainer = Color(0xFF2A2833),
+    onPrimaryContainer = Color(0xFFEDEBF5),
     secondary = BrandAmber,
-    onSecondary = Color(0xFF3A1600),
-    secondaryContainer = Color(0xFF5E2800),
+    onSecondary = Color(0xFF2A0F00),
+    secondaryContainer = Color(0xFF5A2600),
     onSecondaryContainer = Color(0xFFFFE6D2),
-    tertiary = Color(0xFFB9A6FF),
-    onTertiary = Color(0xFF23145F),
-    tertiaryContainer = Color(0xFF3B2A84),
-    onTertiaryContainer = Color(0xFFE6DEFF),
-    error = Color(0xFFFFB3AE),
-    errorContainer = Color(0xFF8E0010),
-    onError = Color(0xFF5C0008),
-    onErrorContainer = Color(0xFFFFDAD9),
+    tertiary = BrandTeal,
+    onTertiary = Color(0xFF00281E),
+    tertiaryContainer = Color(0xFF00503C),
+    onTertiaryContainer = Color(0xFFBFF3E2),
+    error = Color(0xFFFF6E8A),
+    errorContainer = Color(0xFF7A0025),
+    onError = Color(0xFF3F0013),
+    onErrorContainer = Color(0xFFFFDAE2),
+    // Deep, almost-black canvas so the neon accents actually glow.
     background = Color(0xFF0B0B0F),
-    onBackground = Color(0xFFE7E7EF),
+    onBackground = Color(0xFFEDEBF5),
     surface = Color(0xFF0B0B0F),
-    onSurface = Color(0xFFE7E7EF),
-    surfaceVariant = Color(0xFF3A3A46),
-    onSurfaceVariant = Color(0xFFC6C6D2),
-    outline = Color(0xFF8A8A97),
-    outlineVariant = Color(0xFF3A3A46),
-    inverseSurface = Color(0xFFE7E7EF),
-    inverseOnSurface = Color(0xFF0B0B0F),
-    inversePrimary = Color(0xFF17171D),
+    onSurface = Color(0xFFEDEBF5),
+    surfaceVariant = Color(0xFF2B2A35),
+    onSurfaceVariant = Color(0xFFB7B3C4),
+    outline = Color(0xFF7A7788),
+    outlineVariant = Color(0xFF32313D),
+    inverseSurface = Color(0xFFEDEBF5),
+    inverseOnSurface = Color(0xFF15141B),
+    inversePrimary = Color(0xFF15141B),
     scrim = Color(0xFF000000),
-    surfaceTint = BrandAmber,
+    surfaceTint = BrandViolet,
     surfaceContainerLowest = Color(0xFF07070A),
-    surfaceContainerLow = Color(0xFF111117),
-    surfaceContainer = Color(0xFF16161D),
-    surfaceContainerHigh = Color(0xFF1E1E26),
-    surfaceContainerHighest = Color(0xFF272730),
+    surfaceContainerLow = Color(0xFF101017),
+    surfaceContainer = Color(0xFF15151E),
+    surfaceContainerHigh = Color(0xFF1C1C27),
+    surfaceContainerHighest = Color(0xFF242431),
 )
 
 // Semantic Colors
 val colorPing = BrandTeal
-val colorPingRed = Color(0xFFFF3B6B)
-val colorConfigType = BrandAmber
+val colorPingRed = Color(0xFFFF2D6F)
+val colorConfigType = BrandViolet
 val colorFabActive = BrandAmber
-val colorFabInactiveLight = Color(0xFF9A9AA6)
-val colorFabInactiveDark = Color(0xFF5A5A66)
-val dividerColorLight = Color(0xFFD3D3DE)
-val dividerColorDark = Color(0xFF32323C)
+val colorFabInactiveLight = Color(0xFF9B98A8)
+val colorFabInactiveDark = Color(0xFF5B5868)
+val dividerColorLight = Color(0xFFDFDCE9)
+val dividerColorDark = Color(0xFF2B2A35)
 
 // Toast Colors 70%
-val toastNormalBgLight = Color(0xB31E1E26)
-val toastNormalBgDark = Color(0xB3323240)
-val toastSuccessBg = Color(0xB3128A5E)
-val toastErrorBg = Color(0xB3C4162B)
-val toastInfoBg = Color(0xB34A32C8)
+val toastNormalBgLight = Color(0xE61B1A22)
+val toastNormalBgDark = Color(0xE6262531)
+val toastSuccessBg = Color(0xE600A173)
+val toastErrorBg = Color(0xE6D5003C)
+val toastInfoBg = Color(0xE65B3FD6)
 val toastIconCircleBg = Color(0x33FFFFFF)
 val toastTextColor = Color.White
 
@@ -179,8 +180,20 @@ fun resolveDarkTheme(): Boolean {
 val LocalDarkTheme = compositionLocalOf { false }
 
 /**
- * Larger, softer corners than Material defaults. Cards, sheets, dialogs and menus inherit these,
- * which is most of what gives the app its shape language.
+ * Dynamic Color still personalises the neutrals from the wallpaper, but the brand accents are
+ * pinned. Without this the app looked like a stock Material sample on Android 12+.
+ */
+private fun ColorScheme.withBrandAccents(): ColorScheme = copy(
+    secondary = BrandAmber,
+    onSecondary = Color.White,
+    tertiary = BrandTeal,
+    onTertiary = Color.White,
+    surfaceTint = BrandViolet,
+)
+
+/**
+ * Very large, soft corners. Cards, sheets, dialogs and menus all inherit these, which is most of
+ * what makes the app read as a different product at a glance.
  */
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(10.dp),
@@ -190,10 +203,7 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp),
 )
 
-/**
- * Tighter tracking and a clearer weight hierarchy, layered on the Material scale so any style not
- * listed here keeps its default.
- */
+/** Tighter tracking and a heavier hierarchy on top of the Material scale. */
 private val AppTypography = Typography().let { base ->
     base.copy(
         headlineSmall = base.headlineSmall.copy(
@@ -210,13 +220,10 @@ private val AppTypography = Typography().let { base ->
         ),
         bodyLarge = base.bodyLarge.copy(letterSpacing = (-0.1).sp),
         bodyMedium = base.bodyMedium.copy(letterSpacing = (-0.1).sp),
-        labelLarge = base.labelLarge.copy(
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.1.sp,
-        ),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Bold),
         labelSmall = base.labelSmall.copy(
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.5.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
         ),
     )
 }
@@ -230,7 +237,11 @@ fun AppTheme(
     val context = LocalContext.current
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (darkTheme) {
+                dynamicDarkColorScheme(context).withBrandAccents()
+            } else {
+                dynamicLightColorScheme(context).withBrandAccents()
+            }
         }
 
         darkTheme -> DarkColor

@@ -1,5 +1,7 @@
 package com.v2ray.ang.ui.main
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
@@ -24,7 +27,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.v2ray.ang.dto.entities.ProfileItem
@@ -33,6 +38,12 @@ import com.v2ray.ang.ui.compose.QRCodeDialog
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
+/**
+ * Main screen.
+ *
+ * Layout was rebuilt around a connection hero at the top instead of a bottom bar, but every
+ * action, dialog, drawer route, search hook and pager binding below is exactly what it was.
+ */
 @Composable
 fun MainScreen(
     mainViewModel: MainViewModel,
@@ -144,6 +155,19 @@ fun MainScreen(
     ) {
         Scaffold(
             contentWindowInsets = ScaffoldDefaults.contentWindowInsets,
+            containerColor = Color.Transparent,
+            modifier = Modifier.background(
+                // Ambient wash behind everything: a cool tint at the top-left corner fading into
+                // the flat canvas. Purely decorative, drawn once, costs nothing.
+                Brush.radialGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (isDarkTheme) 0.18f else 0.10f),
+                        MaterialTheme.colorScheme.background,
+                    ),
+                    center = Offset(0f, 0f),
+                    radius = 1600f,
+                )
+            ),
             topBar = {
                 MainTopBar(
                     isLoading = isLoading,
@@ -177,74 +201,75 @@ fun MainScreen(
                     }
                 )
             },
-            bottomBar = {
-                MainBottomBar(
-                    displayText = displayText,
-                    isRunning = isRunning,
-                    isDarkTheme = isDarkTheme,
-                    onAction = onAction
-                )
-            },
             floatingActionButton = {},
         ) { innerPadding ->
-            val layoutDirection = LocalLayoutDirection.current
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // The connection hero: same two gestures as the old bottom bar
+                    // (tap panel = test current server, tap dial = start/stop).
+                    MainHeroPanel(
+                        displayText = displayText,
+                        isRunning = isRunning,
+                        isDarkTheme = isDarkTheme,
+                        onAction = onAction
+                    )
 
-            if (groups.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    if (groups.size > 1) {
-                        GroupTabBar(
-                            groups = groups,
-                            selectedTabIndex = pagerState.currentPage.coerceIn(0, groups.lastIndex),
-                            mainViewModel = mainViewModel,
-                            onTabClick = { targetIndex ->
-                                scope.launch {
-                                    pagerState.navigateToPageOptimized(
-                                        targetPage = targetIndex,
-                                        animateAdjacentPage = true
-                                    )
+                    if (groups.isNotEmpty()) {
+                        if (groups.size > 1) {
+                            GroupTabBar(
+                                groups = groups,
+                                selectedTabIndex = pagerState.currentPage.coerceIn(0, groups.lastIndex),
+                                mainViewModel = mainViewModel,
+                                onTabClick = { targetIndex ->
+                                    scope.launch {
+                                        pagerState.navigateToPageOptimized(
+                                            targetPage = targetIndex,
+                                            animateAdjacentPage = true
+                                        )
+                                    }
                                 }
-                            }
-                        )
-                    }
-
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        userScrollEnabled = true,
-                        beyondViewportPageCount = 1,
-                        key = { page -> groups.getOrNull(page)?.id ?: "group-page-$page" }
-                    ) { page ->
-                        val group = groups.getOrNull(page) ?: return@HorizontalPager
-
-                        GroupPagerPage(
-                            groupId = group.id,
-                            mainViewModel = mainViewModel,
-                            selectedGuid = selectedGuid,
-                            locateTarget = uiState.locateTarget,
-                            doubleColumnDisplay = doubleColumnDisplay,
-                            searchQuery = searchQuery,
-                            lazyListStates = lazyListStates,
-                            lazyGridStates = lazyGridStates,
-                            onSelectServer = { guid -> onAction(MainAction.SelectServer(guid)) },
-                            onEditServer = { guid, profile -> onAction(MainAction.EditServer(guid, profile)) },
-                            onShareServer = { guid, profile ->
-                                shareTarget = Triple(guid, profile, false)
-                            },
-                            onMoreServer = { guid, profile ->
-                                shareTarget = Triple(guid, profile, true)
-                            },
-                            onRemoveServer = removeServer,
-                            contentPadding = PaddingValues(
-                                start = 0.dp,
-                                top = 0.dp,
-                                end = 0.dp,
-                                bottom = 80.dp
                             )
-                        )
+                        }
+
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            userScrollEnabled = true,
+                            beyondViewportPageCount = 1,
+                            key = { page -> groups.getOrNull(page)?.id ?: "group-page-$page" }
+                        ) { page ->
+                            val group = groups.getOrNull(page) ?: return@HorizontalPager
+
+                            GroupPagerPage(
+                                groupId = group.id,
+                                mainViewModel = mainViewModel,
+                                selectedGuid = selectedGuid,
+                                locateTarget = uiState.locateTarget,
+                                doubleColumnDisplay = doubleColumnDisplay,
+                                searchQuery = searchQuery,
+                                lazyListStates = lazyListStates,
+                                lazyGridStates = lazyGridStates,
+                                onSelectServer = { guid -> onAction(MainAction.SelectServer(guid)) },
+                                onEditServer = { guid, profile -> onAction(MainAction.EditServer(guid, profile)) },
+                                onShareServer = { guid, profile ->
+                                    shareTarget = Triple(guid, profile, false)
+                                },
+                                onMoreServer = { guid, profile ->
+                                    shareTarget = Triple(guid, profile, true)
+                                },
+                                onRemoveServer = removeServer,
+                                contentPadding = PaddingValues(
+                                    start = 0.dp,
+                                    top = 0.dp,
+                                    end = 0.dp,
+                                    bottom = 32.dp
+                                )
+                            )
+                        }
                     }
                 }
             }
