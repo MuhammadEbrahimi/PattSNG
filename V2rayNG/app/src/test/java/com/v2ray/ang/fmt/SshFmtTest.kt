@@ -11,6 +11,11 @@ import org.junit.Test
 
 class SshFmtTest {
 
+    /** `toUri` returns the scheme-less body, exactly like every other fmt; the app prepends the
+     *  scheme when it shares a profile, so a round-trip test has to do the same. */
+    private fun link(config: ProfileItem) =
+        EConfigType.SSH.protocolScheme + SshFmt.toUri(config)
+
     private fun profile(
         server: String? = "tunnel.example.com",
         port: String? = "2222",
@@ -66,7 +71,7 @@ class SshFmtTest {
     fun `toUri keeps the profile readable by parse`() {
         val original = profile(keepAlive = "60")
 
-        val reparsed = SshFmt.parse(SshFmt.toUri(original))
+        val reparsed = SshFmt.parse(link(original))
 
         assertEquals(original.server, reparsed?.server)
         assertEquals(original.serverPort, reparsed?.serverPort)
@@ -77,7 +82,7 @@ class SshFmtTest {
 
     @Test
     fun `toUri leaves the private key on the device`() {
-        val uri = SshFmt.toUri(
+        val uri = link(
             profile(authMode = SshAuthMode.PRIVATE_KEY, password = null, privateKey = "-----BEGIN-----")
         )
 
