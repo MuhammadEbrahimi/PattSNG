@@ -1,5 +1,5 @@
 [versions]
-jsch = "2.27.2"
+jsch = "0.2.17"
 agp = "9.3.2"
 desugarJdkLibs = "2.1.5"
 gradleLicensePlugin = "0.9.9"
