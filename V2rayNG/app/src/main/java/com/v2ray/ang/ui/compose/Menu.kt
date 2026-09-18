@@ -2,10 +2,8 @@ package com.v2ray.ang.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -24,17 +22,16 @@ import androidx.compose.ui.unit.dp
 /**
  * Dropdown menu rows.
  *
- * Same contract as before - a list, a label resource, a selection callback - but each row now
- * carries the app's visual language: a tinted icon tile, a medium-weight label, and a red accent
- * for destructive entries. Behaviour is unchanged.
+ * `onSelected` stays the LAST parameter so existing callers that pass it as a trailing lambda keep
+ * compiling. The optional styling hooks (`iconRes`, `isDestructive`) come before it.
  */
 @Composable
 fun <T> AppDropdownMenuItems(
     items: List<T>,
     labelRes: (T) -> Int,
-    onSelected: (T) -> Unit,
     iconRes: (T) -> Int? = { null },
-    isDestructive: (T) -> Boolean = { false }
+    isDestructive: (T) -> Boolean = { false },
+    onSelected: (T) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     items.forEach { item ->
@@ -74,6 +71,5 @@ fun <T> AppDropdownMenuItems(
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(14.dp))
         )
-        Spacer(Modifier.width(0.dp))
     }
 }
