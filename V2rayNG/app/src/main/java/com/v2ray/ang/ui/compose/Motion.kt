@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.abs
 
 /**
  * PattNG motion vocabulary.
@@ -30,31 +31,34 @@ import androidx.compose.ui.graphics.graphicsLayer
  */
 object MotionTokens {
     /** Feedback that must feel instant: presses, ripples, tiny colour shifts. */
-    const val QUICK_MS = 120
+    const val QUICK_MS = 110
 
     /** The default: selection changes, colour and size transitions. */
-    const val STANDARD_MS = 240
+    const val STANDARD_MS = 260
 
     /** Entrances and layout-level changes that deserve to be noticed. */
-    const val EMPHASIZED_MS = 420
+    const val EMPHASIZED_MS = 460
 
     /** One breath of the "connected" pulse. */
-    const val PULSE_MS = 2_200
+    const val PULSE_MS = 2_400
 
     /** One full turn of the orbiting ring around the connect button. */
-    const val ORBIT_MS = 5_000
+    const val ORBIT_MS = 5_600
 
     /** Stagger between consecutive list items on first paint. */
-    const val STAGGER_MS = 28
+    const val STAGGER_MS = 34
 
     /** Longest stagger delay, so long lists never feel slow. */
-    const val STAGGER_MAX_MS = 260
+    const val STAGGER_MAX_MS = 280
 
     /**
      * Fast out, slow in - motion leaves immediately and eases into place. This is what makes the
-     * animations read as "minimal" rather than bouncy.
+     * animations read as deliberate rather than bouncy.
      */
-    val easing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    val easing: Easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
+
+    /** Sharper curve for press feedback and other micro-interactions. */
+    val quickEasing: Easing = CubicBezierEasing(0.3f, 0f, 0.2f, 1f)
 }
 
 /** The app's standard tween. Use this instead of hand-written specs. */
@@ -64,7 +68,11 @@ fun <T> appTween(
 ): FiniteAnimationSpec<T> = tween(
     durationMillis = durationMillis,
     delayMillis = delayMillis,
-    easing = MotionTokens.easing,
+    easing = if (durationMillis <= MotionTokens.QUICK_MS) {
+        MotionTokens.quickEasing
+    } else {
+        MotionTokens.easing
+    },
 )
 
 /**
@@ -111,6 +119,9 @@ fun rememberPulse(active: Boolean, durationMillis: Int = MotionTokens.PULSE_MS):
     )
     return progress
 }
+
+/** Turns a 0f..1f linear ramp into a 0 -> 1 -> 0 breath. */
+fun breathOf(progress: Float): Float = 1f - abs(progress - 0.5f) * 2f
 
 /**
  * A 0f..1f progress that runs once, shortly after the composable first appears.
