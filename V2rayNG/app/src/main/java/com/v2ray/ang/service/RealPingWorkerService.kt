@@ -4,6 +4,7 @@ import android.content.Context
 import com.v2ray.ang.core.AetherDelayTester
 import com.v2ray.ang.core.CoreConfigManager
 import com.v2ray.ang.core.CoreNativeManager
+import com.v2ray.ang.core.SshDelayTester
 import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.isComplexType
@@ -111,6 +112,12 @@ class RealPingWorkerService(
         val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
         if (config.configType == EConfigType.AETHER) {
             return AetherDelayTester.measure(context, guid, config, SettingsManager.getDelayTestUrl())
+        }
+        // The speedtest config of an SSH profile dials the loopback SOCKS port of the running
+        // tunnel, so measuring it through Xray reports -1 for every profile that is not the one
+        // running. The tunnel itself is measured instead.
+        if (config.configType == EConfigType.SSH) {
+            return SshDelayTester.measure(guid, config, SettingsManager.getDelayTestUrl())
         }
         if (!config.configType.isComplexType()
             && config.configType != EConfigType.HYSTERIA2
