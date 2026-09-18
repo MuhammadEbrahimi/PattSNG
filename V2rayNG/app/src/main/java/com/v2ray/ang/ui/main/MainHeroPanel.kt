@@ -82,7 +82,7 @@ fun MainHeroPanel(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, top = 6.dp, bottom = 10.dp)
+            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp)
             .graphicsLayer {
                 alpha = entrance
                 translationY = (1f - entrance) * 20.dp.toPx()
