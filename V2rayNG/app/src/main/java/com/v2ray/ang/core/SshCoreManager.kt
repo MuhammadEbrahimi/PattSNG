@@ -48,6 +48,8 @@ object SshCoreManager {
 
     @Volatile
     private var session: Session? = null
+    @Volatile
+    private var socksServer: SshSocksServer? = null
 
     val socksPort: Int get() = AppConfig.PORT_SSH_SOCKS.toInt()
 
@@ -186,7 +188,12 @@ object SshCoreManager {
                 fail(target, "SshCore: the server key $fingerprint does not match the pinned one", null)
                 return
             }
-            jschSession.setPortForwardingD(AppConfig.LOOPBACK, socksPort)
+socksServer = SshSocksServer(
+                session = currentSession,
+                port = AppConfig.PORT_SSH_SOCKS.toInt(),
+                bindAddress = AppConfig.LOOPBACK,
+                connectTimeoutMs = CONNECT_TIMEOUT_MS
+            ).also { it.start() }
             LogUtil.i(
                 AppConfig.TAG,
                 "SshCore: tunnel up, SOCKS on ${AppConfig.LOOPBACK}:$socksPort via port ${serverPort(profile)}"
