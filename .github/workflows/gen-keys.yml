@@ -1,0 +1,36 @@
+name: Generate Keystore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  make-keys:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Create Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore app_keystore.jks \
+            -alias pattng \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 10000 \
+            -storepass "PattSNG@2026" \
+            -keypass "PattSNG@2026" \
+            -dname "CN=PattSNG, OU=Android, O=Patt, L=City, ST=State, C=US"
+
+          base64 -w 0 app_keystore.jks > app_keystore.b64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore-output
+          path: |
+            app_keystore.jks
+            app_keystore.b64
