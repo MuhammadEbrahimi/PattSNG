@@ -5,7 +5,10 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -20,6 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.handler.MmkvManager
@@ -100,6 +106,33 @@ private val DarkColor = darkColorScheme(
     surfaceContainerHigh = Color(0xFF282729), // Dark Gray
     surfaceContainerHighest = Color(0xFF333234), // Dark Gray
 )
+
+/**
+ * Softer, larger corner radii than the Material defaults. Cards, sheets, menus and fields all read
+ * as the same family of rounded surfaces instead of boxes.
+ */
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(30.dp),
+)
+
+/**
+ * The Material type scale with tighter tracking and heavier titles, which is what makes a dense
+ * list of servers read as headings and detail rather than one block of text.
+ */
+private val AppTypography = Typography().let { base ->
+    base.copy(
+        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.4).sp),
+        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
+        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+        bodyLarge = base.bodyLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = (-0.1).sp),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
+    )
+}
 
 // Semantic Colors
 val colorPing = Color(0xFF009966) // Green
@@ -195,7 +228,9 @@ fun AppTheme(
         LocalAppSnackbar provides snackbarController
     ) {
         MaterialTheme(
-            colorScheme = colorScheme
+            colorScheme = colorScheme,
+            shapes = AppShapes,
+            typography = AppTypography
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AppSnackbarBridge(controller = snackbarController)

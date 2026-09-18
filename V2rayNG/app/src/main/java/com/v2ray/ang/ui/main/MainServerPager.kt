@@ -1,7 +1,15 @@
 package com.v2ray.ang.ui.main
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,12 +58,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.LocateTarget
 import com.v2ray.ang.dto.entities.ProfileItem
-import com.v2ray.ang.ui.compose.ItemDivider
+import com.v2ray.ang.ui.compose.MotionTokens
 import com.v2ray.ang.ui.compose.ReorderableGridItem
 import com.v2ray.ang.ui.compose.ReorderableListItem
 import com.v2ray.ang.ui.compose.colorConfigType
 import com.v2ray.ang.ui.compose.colorPing
 import com.v2ray.ang.ui.compose.colorPingRed
+import com.v2ray.ang.ui.compose.appTween
+import com.v2ray.ang.ui.compose.pressScale
 import com.v2ray.ang.ui.compose.verticalScrollbar
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -218,7 +229,6 @@ private fun ServerListPage(
                                 actions = actions
                             )
                         }
-                        ItemDivider()
                     }
                 } else {
                     ServerItemRow(
@@ -226,7 +236,6 @@ private fun ServerListPage(
                         isSelected = row.guid == selectedGuid,
                         actions = actions
                     )
-                    ItemDivider()
                 }
             }
         }
@@ -293,7 +302,6 @@ private fun ServerItemColumn(
             doubleColumnDisplay = doubleColumnDisplay,
             actions = actions
         )
-        ItemDivider()
     }
 }
 
@@ -314,33 +322,53 @@ private fun ServerListItem(
     } else {
         null
     }
+    val interactionSource = remember { MutableInteractionSource() }
+    // Selection is drawn as a card that tints itself and grows an accent rail, so picking a
+    // server is a change the eye can follow rather than a redraw.
+    val cardColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = appTween(MotionTokens.STANDARD_MS),
+        label = "RowBackground"
+    )
+    val railWidth by animateDpAsState(
+        targetValue = if (isSelected) 4.dp else 0.dp,
+        animationSpec = appTween(MotionTokens.STANDARD_MS),
+        label = "RowRail"
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 4.dp)
             .height(IntrinsicSize.Min)
+            .pressScale(interactionSource, pressedScale = 0.985f)
+            .clip(MaterialTheme.shapes.medium)
+            .background(cardColor)
             .semantics {
                 if (selectedStateDescription != null) {
                     stateDescription = selectedStateDescription
                 }
             }
-            .clickable { actions.select(row.guid) }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple()
+            ) { actions.select(row.guid) }
     ) {
         Box(
             Modifier
                 .width(10.dp)
                 .fillMaxHeight()
         ) {
-            if (isSelected) {
-                Row {
-                    Spacer(Modifier.width(6.dp))
-                    Box(
-                        Modifier
-                            .width(4.dp)
-                            .fillMaxHeight()
-                            .padding(vertical = 10.dp)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
+            Row {
+                Spacer(Modifier.width(3.dp))
+                Box(
+                    Modifier
+                        .width(railWidth)
+                        .fillMaxHeight()
+                        .padding(vertical = 10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
             }
         }
 
@@ -407,7 +435,19 @@ private fun ServerListItem(
             Spacer(modifier = Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(row.typeDescription, style = MaterialTheme.typography.bodySmall, color = colorConfigType, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(testResult, style = MaterialTheme.typography.bodySmall, color = if (row.testDelayMillis < 0L) colorPingRed else colorPing, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A fresh measurement pops in where the old one was, which is the only place in
+                // the row where a number changes on its own.
+                AnimatedContent(
+                    targetState = testResult,
+                    transitionSpec = {
+                        (fadeIn(appTween(MotionTokens.STANDARD_MS)) +
+                            scaleIn(appTween(MotionTokens.STANDARD_MS), initialScale = 0.85f)) togetherWith
+                            fadeOut(appTween(MotionTokens.QUICK_MS))
+                    },
+                    label = "PingValue"
+                ) { value ->
+                    Text(value, style = MaterialTheme.typography.bodySmall, color = if (row.testDelayMillis < 0L) colorPingRed else colorPing, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
