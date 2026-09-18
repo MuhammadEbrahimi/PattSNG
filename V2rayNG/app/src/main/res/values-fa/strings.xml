@@ -623,4 +623,24 @@
         <item>شدید</item>
     </string-array>
 
+
+    <!-- SSH tunnel -->
+    <string name="server_lab_ssh_username">نام کاربری SSH</string>
+    <string name="server_lab_ssh_auth_mode">روش احراز هویت</string>
+    <string name="server_lab_ssh_password">رمز SSH</string>
+    <string name="server_lab_ssh_private_key">کلید خصوصی</string>
+    <string name="server_lab_ssh_private_key_hint">-----BEGIN OPENSSH PRIVATE KEY-----</string>
+    <string name="server_lab_ssh_passphrase">عبارت عبور کلید</string>
+    <string name="server_lab_ssh_host_key">انگشت‌نگاره کلید سرور</string>
+    <string name="server_lab_ssh_host_key_hint">خالی بماند تا اولین کلید پذیرفته شود</string>
+    <string name="server_lab_ssh_keep_alive">فاصله پیام زنده‌ماندن (ثانیه)</string>
+    <string name="server_lab_ssh_compression">فشرده‌سازی</string>
+    <string name="server_lab_ssh_compression_summary">روی اینترنت کند مفید است، روی اینترنت تند پردازشگر می‌گیرد</string>
+    <string name="ssh_core_connecting">در حال برقراری تانل SSH…</string>
+    <string name="ssh_core_stopped">تانل SSH قطع شد</string>
+    <string name="menu_item_import_config_manually_ssh">افزودن دستی پروفایل SSH</string>
+    <string-array name="ssh_auth_mode_entries">
+        <item>رمز</item>
+        <item>کلید خصوصی</item>
+    </string-array>
 </resources>

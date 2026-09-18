@@ -6,6 +6,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import com.v2ray.ang.AppConfig.DEFAULT_PORT
 import com.v2ray.ang.AppConfig.REALITY
+import com.v2ray.ang.AppConfig.SSH_DEFAULT_PORT
 import com.v2ray.ang.AppConfig.WIREGUARD_LOCAL_ADDRESS_V4
 import com.v2ray.ang.AppConfig.WIREGUARD_LOCAL_MTU
 import com.v2ray.ang.dto.entities.ProfileItem
@@ -16,6 +17,7 @@ import com.v2ray.ang.enums.AetherScanMode
 import com.v2ray.ang.enums.AetherTransport
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.enums.NetworkType
+import com.v2ray.ang.enums.SshAuthMode
 import com.v2ray.ang.extension.nullIfBlank
 import com.v2ray.ang.util.JsonUtil
 
@@ -78,7 +80,14 @@ class ServerUiState(
     aetherWiwInner: String = "",
     aetherFragment: Boolean = false,
     aetherFragmentSize: String = "",
-    aetherFragmentDelay: String = ""
+    aetherFragmentDelay: String = "",
+    sshUsername: String = "",
+    sshAuthMode: String = SshAuthMode.PASSWORD.type,
+    sshPrivateKey: String = "",
+    sshPassphrase: String = "",
+    sshHostKey: String = "",
+    sshKeepAlive: String = "",
+    sshCompression: Boolean = false
 ) {
     var configType by mutableStateOf(configType)
     var remarks by mutableStateOf(remarks)
@@ -139,6 +148,13 @@ class ServerUiState(
     var aetherFragment by mutableStateOf(aetherFragment)
     var aetherFragmentSize by mutableStateOf(aetherFragmentSize)
     var aetherFragmentDelay by mutableStateOf(aetherFragmentDelay)
+    var sshUsername by mutableStateOf(sshUsername)
+    var sshAuthMode by mutableStateOf(sshAuthMode)
+    var sshPrivateKey by mutableStateOf(sshPrivateKey)
+    var sshPassphrase by mutableStateOf(sshPassphrase)
+    var sshHostKey by mutableStateOf(sshHostKey)
+    var sshKeepAlive by mutableStateOf(sshKeepAlive)
+    var sshCompression by mutableStateOf(sshCompression)
 
     fun toProfileItem(initialConfig: ProfileItem): ProfileItem {
         val isVmess = configType == EConfigType.VMESS
@@ -148,6 +164,7 @@ class ServerUiState(
         val isWireguard = configType == EConfigType.WIREGUARD
         val isHysteria2 = configType == EConfigType.HYSTERIA2
         val isAether = configType == EConfigType.AETHER
+        val isSsh = configType == EConfigType.SSH
 
         return initialConfig.copy(
             configType = configType,
@@ -217,7 +234,22 @@ class ServerUiState(
             aetherWiwInner = if (isAether) aetherWiwInner.nullIfBlank() else null,
             aetherFragment = if (isAether) aetherFragment else null,
             aetherFragmentSize = if (isAether) aetherFragmentSize.nullIfBlank() else null,
-            aetherFragmentDelay = if (isAether) aetherFragmentDelay.nullIfBlank() else null
+            aetherFragmentDelay = if (isAether) aetherFragmentDelay.nullIfBlank() else null,
+            sshUsername = if (isSsh) sshUsername.nullIfBlank() else null,
+            sshAuthMode = if (isSsh) sshAuthMode else null,
+            sshPrivateKey = if (isSsh && SshAuthMode.fromString(sshAuthMode) == SshAuthMode.PRIVATE_KEY) {
+                sshPrivateKey.nullIfBlank()
+            } else {
+                null
+            },
+            sshPassphrase = if (isSsh && SshAuthMode.fromString(sshAuthMode) == SshAuthMode.PRIVATE_KEY) {
+                sshPassphrase.nullIfBlank()
+            } else {
+                null
+            },
+            sshHostKey = if (isSsh) sshHostKey.nullIfBlank() else null,
+            sshKeepAlive = if (isSsh) sshKeepAlive.nullIfBlank() else null,
+            sshCompression = if (isSsh) sshCompression else null
         )
     }
 
@@ -229,8 +261,13 @@ class ServerUiState(
                 configType = initialConfig.configType,
                 remarks = initialConfig.remarks,
                 address = initialConfig.server ?: "",
-                port = initialConfig.serverPort
-                    ?: if (initialConfig.configType == EConfigType.AETHER) "" else DEFAULT_PORT.toString(),
+                // Aether finds its own endpoint, so its port starts empty; SSH starts on 22 and
+                // the user overrides it whenever the server listens elsewhere.
+                port = initialConfig.serverPort ?: when (initialConfig.configType) {
+                    EConfigType.AETHER -> ""
+                    EConfigType.SSH -> SSH_DEFAULT_PORT.toString()
+                    else -> DEFAULT_PORT.toString()
+                },
                 password = initialConfig.password ?: "",
                 method = initialConfig.method ?: "",
                 flow = initialConfig.flow ?: "",
@@ -285,7 +322,14 @@ class ServerUiState(
                 aetherWiwInner = initialConfig.aetherWiwInner ?: "",
                 aetherFragment = initialConfig.aetherFragment ?: false,
                 aetherFragmentSize = initialConfig.aetherFragmentSize ?: "",
-                aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: ""
+                aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: "",
+                sshUsername = initialConfig.sshUsername ?: "",
+                sshAuthMode = SshAuthMode.fromString(initialConfig.sshAuthMode).type,
+                sshPrivateKey = initialConfig.sshPrivateKey ?: "",
+                sshPassphrase = initialConfig.sshPassphrase ?: "",
+                sshHostKey = initialConfig.sshHostKey ?: "",
+                sshKeepAlive = initialConfig.sshKeepAlive ?: "",
+                sshCompression = initialConfig.sshCompression == true
             )
 
         fun from(

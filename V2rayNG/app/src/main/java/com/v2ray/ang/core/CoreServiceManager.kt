@@ -52,6 +52,9 @@ object CoreServiceManager {
 
     private const val AETHER_WARM_UP_MS = 30_000L
 
+    /** An SSH handshake and its dynamic forward are up in seconds, so the wait is far shorter. */
+    private const val SSH_WARM_UP_MS = 15_000L
+
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
@@ -67,6 +70,14 @@ object CoreServiceManager {
     /** Set once an Aether exit has stopped the service, so a second report of the same exit is a no-op. */
     @Volatile
     private var aetherExitHandled = false
+
+    /** Owns the SSH warm-up wait; cancelled on every start and stop so a stale wait cannot report. */
+    private val sshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var sshWarmUpJob: Job? = null
+
+    /** Same one-shot guard as the Aether flag, for the SSH tunnel dropping under a running Xray. */
+    @Volatile
+    private var sshExitHandled = false
 
     @Volatile
     private var isReloading = false
@@ -171,11 +182,20 @@ object CoreServiceManager {
             AetherCoreManager.stop()
         }
 
+        cancelSshWarmUp()
+        if (config.configType == EConfigType.SSH) {
+            sshExitHandled = false
+            SshCoreManager.start(service, config) { onSshExit(guid) }
+        } else {
+            SshCoreManager.stop()
+        }
+
         try {
             launchNativeCore(service, guid, config, result.content, vpnInterface, isReload)
         } catch (e: Exception) {
-            // Setup failed after this attempt spawned the Aether process; release it with the rest.
+            // Setup failed after this attempt spawned the tunnel; release it with the rest.
             AetherCoreManager.stop()
+            SshCoreManager.stop()
             throw e
         }
     }
@@ -231,6 +251,8 @@ object CoreServiceManager {
 
         if (config.configType == EConfigType.AETHER) {
             announceAetherWarmUp(service, guid, isReload)
+        } else if (config.configType == EConfigType.SSH) {
+            announceSshWarmUp(service, guid, isReload)
         } else if (!isReload) {
             MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         }
@@ -295,6 +317,60 @@ object CoreServiceManager {
     }
 
     /**
+     * Same warm-up contract as Aether: Xray is up immediately, but an SSH profile carries no
+     * traffic until the handshake, the authentication and the dynamic forward are done, so the
+     * connecting state is shown first and start-success follows once the local SOCKS listener
+     * accepts connections.
+     */
+    private fun announceSshWarmUp(service: Service, guid: String, isReload: Boolean) {
+        val connecting = service.getString(R.string.ssh_core_connecting)
+        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_RUNNING, "")
+        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_CONNECTING, connecting)
+        NotificationManager.setStatusLine(connecting)
+        sshWarmUpJob = sshScope.launch {
+            val listening = SshCoreManager.awaitListening(SSH_WARM_UP_MS)
+            when {
+                // A cancelled wait or a service that is no longer running has nothing to report.
+                !isActive || !isRunning() -> Unit
+                listening -> {
+                    NotificationManager.setStatusLine(null)
+                    val ready = if (isReload) AppConfig.MSG_STATE_RUNNING else AppConfig.MSG_STATE_START_SUCCESS
+                    MessageHelper.sendMsg2UI(service, ready, "")
+                }
+                // The tunnel never came up, or it exited while Xray was still starting.
+                else -> onSshExit(guid)
+            }
+        }
+    }
+
+    private fun isSshWarmingUp(): Boolean = sshWarmUpJob?.isActive == true
+
+    private fun cancelSshWarmUp() {
+        sshWarmUpJob?.cancel()
+        sshWarmUpJob = null
+        NotificationManager.setStatusLine(null)
+    }
+
+    /**
+     * Stops the service once the SSH tunnel is gone while Xray still runs. Reached from the
+     * tunnel watchdog and from the warm-up wait, so the stop happens once per session.
+     */
+    private fun onSshExit(guid: String) {
+        val control = serviceControl?.get() ?: return
+        val service = control.getService()
+        ContextCompat.getMainExecutor(service).execute {
+            if (sshExitHandled || SshCoreManager.isRunning || !isRunning() || serviceControl?.get() !== control) return@execute
+            sshExitHandled = true
+            LogUtil.e(
+                AppConfig.TAG,
+                "StartCore-Manager: SSH tunnel exited while running, stopping ${service.javaClass.simpleName}, guid=$guid"
+            )
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, service.getString(R.string.ssh_core_stopped))
+            control.stopService()
+        }
+    }
+
+    /**
      * Stops the V2Ray core service.
      * Unregisters broadcast receivers, stops notifications, and shuts down plugins.
      * @return True if the core was stopped successfully, false otherwise.
@@ -308,6 +384,8 @@ object CoreServiceManager {
         currentVpnInterface = null
         cancelAetherWarmUp()
         AetherCoreManager.stop()
+        cancelSshWarmUp()
+        SshCoreManager.stop()
 
         if (isRunning()) {
             CoroutineScope(Dispatchers.IO).launch {
@@ -440,6 +518,15 @@ object CoreServiceManager {
             // The same budget every other profile's probe gets; a tunnel still scanning past it is reported, not waited for.
             if (currentConfig?.configType == EConfigType.AETHER && !AetherCoreManager.awaitListening(AetherDelayTester.TEST_BUDGET_MS)) {
                 val reason = if (AetherCoreManager.isRunning) R.string.aether_core_connecting else R.string.aether_core_stopped
+                val stalled = ConnectionTestResult(delayMillis = -1L, errorMessage = service.getString(reason))
+                withContext(Dispatchers.Main.immediate) {
+                    MessageHelper.sendMsg2UI(service, AppConfig.MSG_MEASURE_DELAY_RESULT, stalled, requestId)
+                }
+                return@launch
+            }
+
+            if (currentConfig?.configType == EConfigType.SSH && !SshCoreManager.awaitListening(AetherDelayTester.TEST_BUDGET_MS)) {
+                val reason = if (SshCoreManager.isRunning) R.string.ssh_core_connecting else R.string.ssh_core_stopped
                 val stalled = ConnectionTestResult(delayMillis = -1L, errorMessage = service.getString(reason))
                 withContext(Dispatchers.Main.immediate) {
                     MessageHelper.sendMsg2UI(service, AppConfig.MSG_MEASURE_DELAY_RESULT, stalled, requestId)
@@ -585,12 +672,18 @@ object CoreServiceManager {
                 AppConfig.MSG_REGISTER_CLIENT -> {
                     if (isRunning()) {
                         MessageHelper.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_RUNNING, "")
-                        if (isAetherWarmingUp()) {
+                        // A client registering mid warm-up has to be told which tunnel is still connecting.
+                        val warmingUp = when {
+                            isAetherWarmingUp() -> R.string.aether_core_connecting
+                            isSshWarmingUp() -> R.string.ssh_core_connecting
+                            else -> null
+                        }
+                        if (warmingUp != null) {
                             val service = serviceControl.getService()
                             MessageHelper.sendMsg2UI(
                                 service,
                                 AppConfig.MSG_STATE_CONNECTING,
-                                service.getString(R.string.aether_core_connecting)
+                                service.getString(warmingUp)
                             )
                         }
                     } else {

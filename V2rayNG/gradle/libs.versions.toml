@@ -1,4 +1,5 @@
 [versions]
+jsch = "2.27.2"
 agp = "9.3.2"
 desugarJdkLibs = "2.1.5"
 gradleLicensePlugin = "0.9.9"
@@ -22,6 +23,7 @@ composeBom = "2026.06.01"
 reorderable = "3.1.0"
 coil = "2.7.0"
 [libraries]
+jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 gradle-license-plugin = { module = "com.jaredsburrows:gradle-license-plugin", version.ref = "gradleLicensePlugin" }

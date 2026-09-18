@@ -625,4 +625,24 @@
         <item>Aggressive</item>
     </string-array>
 
+
+    <!-- SSH tunnel -->
+    <string name="server_lab_ssh_username">SSH username</string>
+    <string name="server_lab_ssh_auth_mode">Authentication</string>
+    <string name="server_lab_ssh_password">SSH password</string>
+    <string name="server_lab_ssh_private_key">Private key</string>
+    <string name="server_lab_ssh_private_key_hint">-----BEGIN OPENSSH PRIVATE KEY-----</string>
+    <string name="server_lab_ssh_passphrase">Key passphrase</string>
+    <string name="server_lab_ssh_host_key">Server key fingerprint</string>
+    <string name="server_lab_ssh_host_key_hint">Leave empty to trust the first key seen</string>
+    <string name="server_lab_ssh_keep_alive">Keep-alive interval (seconds)</string>
+    <string name="server_lab_ssh_compression">Compression</string>
+    <string name="server_lab_ssh_compression_summary">Helps on slow links, costs CPU on fast ones</string>
+    <string name="ssh_core_connecting">Connecting the SSH tunnel…</string>
+    <string name="ssh_core_stopped">The SSH tunnel stopped</string>
+    <string name="menu_item_import_config_manually_ssh">Add an SSH profile manually</string>
+    <string-array name="ssh_auth_mode_entries">
+        <item>Password</item>
+        <item>Private key</item>
+    </string-array>
 </resources>

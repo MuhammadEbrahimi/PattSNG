@@ -87,6 +87,15 @@ data class ProfileItem(
     var aetherFragment: Boolean? = null,
     var aetherFragmentSize: String? = null,
     var aetherFragmentDelay: String? = null,
+    // SSH tunnel. The address, the port and the password reuse `server`, `serverPort` and
+    // `password`; the port holds what the user typed, defaulting to 22.
+    var sshUsername: String? = null,
+    var sshAuthMode: String? = null,
+    var sshPrivateKey: String? = null,
+    var sshPassphrase: String? = null,
+    var sshHostKey: String? = null,
+    var sshKeepAlive: String? = null,
+    var sshCompression: Boolean? = null,
 ) {
 
     companion object {

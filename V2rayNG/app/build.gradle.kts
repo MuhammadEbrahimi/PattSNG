@@ -157,6 +157,8 @@ dependencies {
 
     // AndroidX Core Libraries
     implementation(libs.androidx.core.ktx)
+    // Maintained JSch fork; its dynamic port forwarding is the `ssh -D` SOCKS5 listener.
+    implementation(libs.jsch)
     implementation(libs.androidx.appcompat)
 
     // Compose Libraries

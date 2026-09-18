@@ -33,6 +33,7 @@ object CoreOutboundBuilder {
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
             EConfigType.AETHER -> toOutboundAether()
+            EConfigType.SSH -> toOutboundSsh()
             else -> null
         }
 
@@ -228,6 +229,21 @@ object CoreOutboundBuilder {
                 settings.user = profileItem.username.orEmpty()
                 settings.pass = profileItem.password.orEmpty()
             }
+        }
+
+        return outboundBean
+    }
+
+    /**
+     * The SSH tunnel is reached exactly like the Aether core: Xray dials the local SOCKS5
+     * listener the tunnel opened, and the tunnel carries the traffic to the SSH server.
+     */
+    private fun toOutboundSsh(): OutboundBean? {
+        val outboundBean = createInitOutbound(EConfigType.SOCKS)
+
+        outboundBean?.settings?.let { settings ->
+            settings.address = AppConfig.LOOPBACK
+            settings.port = SshCoreManager.socksPort
         }
 
         return outboundBean
