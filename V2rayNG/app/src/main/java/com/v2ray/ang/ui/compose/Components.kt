@@ -2,9 +2,12 @@ package com.v2ray.ang.ui.compose
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,54 +17,62 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.v2ray.ang.R
 import com.v2ray.ang.util.AppIconFetcher
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Shared header for every secondary screen (Settings, Subscriptions, Routing, Logcat, ...).
+ *
+ * The Material [androidx.compose.material3.TopAppBar] is gone. Every screen now gets the same
+ * two-line title block and capsule buttons as the main screen, so navigating out of the main
+ * screen no longer drops the user into stock Material. The parameter list is unchanged, so no
+ * caller needs editing.
+ */
 @Composable
 fun AppTopBar(
     title: String,
@@ -75,46 +86,100 @@ fun AppTopBar(
     navigationIcon: @Composable (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    Column {
-        TopAppBar(
-            title = {
-                if (isSearchActive) {
-                    SearchInputField(
-                        query = searchQuery,
-                        onQueryChange = onSearchQueryChange,
-                        placeholder = searchPlaceholder
-                    )
-                } else {
-                    Text(text = title)
-                }
-            },
-            navigationIcon = {
-                if (navigationIcon != null) {
-                    navigationIcon()
-                } else {
-                    IconButton(onClick = if (isSearchActive) onSearchClose else onBackClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_back_24dp),
-                            contentDescription = stringResource(R.string.acc_back)
-                        )
-                    }
-                }
-            },
-            actions = actions,
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                titleContentColor = MaterialTheme.colorScheme.onSurface,
-                navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                actionIconContentColor = MaterialTheme.colorScheme.onSurface
-            )
-        )
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 68.dp)
+                .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (navigationIcon != null) {
+                navigationIcon()
+            } else {
+                AppCapsuleButton(
+                    iconRes = R.drawable.ic_arrow_back_24dp,
+                    description = stringResource(R.string.acc_back),
+                    onClick = if (isSearchActive) onSearchClose else onBackClick,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            if (isSearchActive) {
+                SearchInputField(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange,
+                    placeholder = searchPlaceholder,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+        }
         AnimatedVisibility(
             visible = isLoading,
-            enter = expandVertically(),
-            exit = shrinkVertically()
+            enter = fadeIn(appTween()),
+            exit = fadeOut(appTween())
         ) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.secondary)
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .height(3.dp)
+                    .clip(CircleShape),
+                color = scheme.secondary,
+                trackColor = scheme.surfaceContainerHigh
+            )
         }
+    }
+}
+
+/** Capsule icon button used by headers across the app. */
+@Composable
+fun AppCapsuleButton(
+    iconRes: Int,
+    description: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Boolean = false,
+    shape: androidx.compose.ui.graphics.Shape = CircleShape
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val scheme = MaterialTheme.colorScheme
+    val fill = if (accent) {
+        Brush.linearGradient(listOf(scheme.secondary, scheme.tertiary))
+    } else {
+        Brush.linearGradient(listOf(scheme.surfaceContainerHigh, scheme.surfaceContainerHigh))
+    }
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .pressScale(interaction, pressedScale = 0.9f)
+            .clip(shape)
+            .background(fill)
+            .clickable(interactionSource = interaction, indication = null) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = description,
+            modifier = Modifier.size(22.dp),
+            tint = if (accent) scheme.onSecondary else scheme.onSurface
+        )
     }
 }
 
@@ -122,36 +187,55 @@ fun AppTopBar(
 private fun SearchInputField(
     query: String,
     onQueryChange: (String) -> Unit,
-    placeholder: String?
+    placeholder: String?,
+    modifier: Modifier = Modifier
 ) {
+    val scheme = MaterialTheme.colorScheme
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
-            placeholder = { if (placeholder != null) Text(placeholder, style = TextStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)) },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                cursorColor = MaterialTheme.colorScheme.secondary,
-                selectionColors = TextSelectionColors(
-                    handleColor = MaterialTheme.colorScheme.secondary,
-                    backgroundColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+    Row(
+        modifier = modifier
+            .heightIn(min = 46.dp)
+            .clip(CircleShape)
+            .background(scheme.surfaceContainerHigh)
+            .padding(start = 16.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+                cursorBrush = SolidColor(scheme.secondary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+            )
+            if (query.isEmpty() && placeholder != null) {
+                Text(
+                    text = placeholder,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = scheme.onSurfaceVariant
                 )
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focusRequester)
-        )
+            }
+        }
         if (query.isNotEmpty()) {
-            IconButton(onClick = { onQueryChange("") }) {
-                Icon(painterResource(android.R.drawable.ic_menu_close_clear_cancel), "Clear")
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(scheme.secondary.copy(alpha = 0.18f))
+                    .clickable { onQueryChange("") },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 12.dp, height = 2.dp)
+                        .clip(CircleShape)
+                        .background(scheme.secondary)
+                )
             }
         }
     }
@@ -167,11 +251,17 @@ fun AppListItem(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 3.dp)
+            .pressScale(interaction, pressedScale = 0.99f)
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (checked) scheme.secondary.copy(alpha = 0.12f) else scheme.surfaceContainerLow)
+            .clickable(interactionSource = interaction, indication = null) { onCheckedChange(!checked) }
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         val model = remember(icon, packageName) {
@@ -189,16 +279,19 @@ fun AppListItem(
         AsyncImage(
             model = model,
             contentDescription = null,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp)),
             contentScale = ContentScale.Fit,
             error = painterResource(R.drawable.ic_image_24dp),
             fallback = painterResource(R.drawable.ic_image_24dp)
         )
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = appName,
                 style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -206,7 +299,7 @@ fun AppListItem(
             Text(
                 text = packageName,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = scheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -214,7 +307,7 @@ fun AppListItem(
         Checkbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.secondary)
+            colors = CheckboxDefaults.colors(checkedColor = scheme.secondary)
         )
     }
 }
@@ -250,20 +343,31 @@ fun VersionInfoBlock(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 14.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = versionText, style = MaterialTheme.typography.bodySmall)
+        Text(
+            text = versionText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (appIdText != null) {
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = appIdText, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = appIdText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
 
 @Composable
 private fun reorderableElevation(isDragging: Boolean) = animateDpAsState(
-    targetValue = if (isDragging) 4.dp else 0.dp,
+    targetValue = if (isDragging) 6.dp else 0.dp,
     label = "ReorderableElevation"
 )
 
@@ -285,8 +389,11 @@ fun ReorderableListItem(
     content: @Composable RowScope.() -> Unit
 ) {
     val elevation by reorderableElevation(isDragging)
+    // Transparent container: the rows are the only thing that paints, so the list no longer sits
+    // on a darker slab than the page background.
     Surface(
         modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent,
         shadowElevation = elevation
     ) {
         Row(
@@ -310,6 +417,7 @@ fun ReorderableGridItem(
         modifier = Modifier
             .fillMaxWidth()
             .then(with(scope) { reorderableDragHandle() }),
+        color = Color.Transparent,
         shadowElevation = elevation
     ) {
         content()
