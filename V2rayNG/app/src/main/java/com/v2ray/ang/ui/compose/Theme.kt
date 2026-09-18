@@ -107,33 +107,6 @@ private val DarkColor = darkColorScheme(
     surfaceContainerHighest = Color(0xFF333234), // Dark Gray
 )
 
-/**
- * Softer, larger corner radii than the Material defaults. Cards, sheets, menus and fields all read
- * as the same family of rounded surfaces instead of boxes.
- */
-private val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(30.dp),
-)
-
-/**
- * The Material type scale with tighter tracking and heavier titles, which is what makes a dense
- * list of servers read as headings and detail rather than one block of text.
- */
-private val AppTypography = Typography().let { base ->
-    base.copy(
-        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.4).sp),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
-        bodyLarge = base.bodyLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = (-0.1).sp),
-        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
-    )
-}
-
 // Semantic Colors
 val colorPing = Color(0xFF009966) // Green
 val colorPingRed = Color(0xFFFF0099) // Pink Red
@@ -193,6 +166,45 @@ fun resolveDarkTheme(): Boolean {
 }
 
 val LocalDarkTheme = compositionLocalOf { false }
+
+/**
+ * Softer, larger corners than the Material defaults. Cards, sheets, dialogs and menus all pick
+ * these up automatically, which is most of what makes the app read as modern.
+ */
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(30.dp),
+)
+
+/**
+ * Tighter tracking and a clearer weight hierarchy, built on top of the Material scale so that any
+ * style not listed here keeps its default.
+ */
+private val AppTypography = Typography().let { base ->
+    base.copy(
+        headlineSmall = base.headlineSmall.copy(
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.4).sp,
+        ),
+        titleLarge = base.titleLarge.copy(
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.3).sp,
+        ),
+        titleMedium = base.titleMedium.copy(
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.2).sp,
+        ),
+        bodyLarge = base.bodyLarge.copy(letterSpacing = (-0.1).sp),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        labelSmall = base.labelSmall.copy(
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.3.sp,
+        ),
+    )
+}
 
 @Composable
 fun AppTheme(

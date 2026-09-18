@@ -1,12 +1,10 @@
 package com.v2ray.ang.ui.main
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -33,10 +31,10 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ripple
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -61,11 +60,13 @@ import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.ui.compose.MotionTokens
 import com.v2ray.ang.ui.compose.ReorderableGridItem
 import com.v2ray.ang.ui.compose.ReorderableListItem
+import com.v2ray.ang.ui.compose.appTween
 import com.v2ray.ang.ui.compose.colorConfigType
 import com.v2ray.ang.ui.compose.colorPing
 import com.v2ray.ang.ui.compose.colorPingRed
-import com.v2ray.ang.ui.compose.appTween
 import com.v2ray.ang.ui.compose.pressScale
+import com.v2ray.ang.ui.compose.rememberEntrance
+import com.v2ray.ang.ui.compose.staggerDelay
 import com.v2ray.ang.ui.compose.verticalScrollbar
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -170,10 +171,11 @@ private fun ServerListPage(
                 .verticalScrollbar(gridState),
             contentPadding = contentPadding
         ) {
-            itemsIndexed(items = rows, key = { _, item -> item.guid }) { _, row ->
+            itemsIndexed(items = rows, key = { _, item -> item.guid }) { index, row ->
                 val content: @Composable () -> Unit = {
-                    ServerItemColumn(
+                    ServerCard(
                         row = row,
+                        index = index,
                         isSelected = row.guid == selectedGuid,
                         doubleColumnDisplay = true,
                         actions = actions
@@ -213,7 +215,7 @@ private fun ServerListPage(
                 .verticalScrollbar(listState),
             contentPadding = contentPadding
         ) {
-            itemsIndexed(items = rows, key = { _, item -> item.guid }) { _, row ->
+            itemsIndexed(items = rows, key = { _, item -> item.guid }) { index, row ->
                 if (canReorder && reorderableState != null) {
                     ReorderableItem(
                         reorderableState,
@@ -223,17 +225,21 @@ private fun ServerListPage(
                             scope = this,
                             isDragging = isDragging
                         ) {
-                            ServerItemRow(
+                            ServerCard(
                                 row = row,
+                                index = index,
                                 isSelected = row.guid == selectedGuid,
+                                doubleColumnDisplay = false,
                                 actions = actions
                             )
                         }
                     }
                 } else {
-                    ServerItemRow(
+                    ServerCard(
                         row = row,
+                        index = index,
                         isSelected = row.guid == selectedGuid,
+                        doubleColumnDisplay = false,
                         actions = actions
                     )
                 }
@@ -274,40 +280,17 @@ private fun LocateTargetEffect(
     }
 }
 
+/**
+ * One server, as a card.
+ *
+ * The data, the callbacks and the action buttons are exactly what the old row had. What is new is
+ * the container: rows became separated cards, the divider became a growing accent rail, and the
+ * card fades and lifts into place with a small per-index delay so the list assembles itself.
+ */
 @Composable
-private fun ServerItemRow(
+private fun ServerCard(
     row: ServerRowUiModel,
-    isSelected: Boolean,
-    actions: ServerRowActions
-) {
-    ServerListItem(
-        row = row,
-        isSelected = isSelected,
-        doubleColumnDisplay = false,
-        actions = actions
-    )
-}
-
-@Composable
-private fun ServerItemColumn(
-    row: ServerRowUiModel,
-    isSelected: Boolean,
-    doubleColumnDisplay: Boolean,
-    actions: ServerRowActions
-) {
-    Column {
-        ServerListItem(
-            row = row,
-            isSelected = isSelected,
-            doubleColumnDisplay = doubleColumnDisplay,
-            actions = actions
-        )
-    }
-}
-
-@Composable
-private fun ServerListItem(
-    row: ServerRowUiModel,
+    index: Int,
     isSelected: Boolean,
     doubleColumnDisplay: Boolean,
     actions: ServerRowActions
@@ -322,92 +305,82 @@ private fun ServerListItem(
     } else {
         null
     }
-    val interactionSource = remember { MutableInteractionSource() }
-    // Selection is drawn as a card that tints itself and grows an accent rail, so picking a
-    // server is a change the eye can follow rather than a redraw.
+
+    val interaction = remember { MutableInteractionSource() }
+    // Entrance: keyed on the guid, so scrolling and reordering never replay it.
+    val entrance = rememberEntrance(row.guid, staggerDelay(index))
     val cardColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
         else MaterialTheme.colorScheme.surfaceContainerLow,
-        animationSpec = appTween(MotionTokens.STANDARD_MS),
-        label = "RowBackground"
+        animationSpec = appTween(),
+        label = "cardColor"
     )
     val railWidth by animateDpAsState(
         targetValue = if (isSelected) 4.dp else 0.dp,
-        animationSpec = appTween(MotionTokens.STANDARD_MS),
-        label = "RowRail"
+        animationSpec = appTween(MotionTokens.EMPHASIZED_MS),
+        label = "rail"
     )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-            .height(IntrinsicSize.Min)
-            .pressScale(interactionSource, pressedScale = 0.985f)
-            .clip(MaterialTheme.shapes.medium)
+            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .graphicsLayer {
+                alpha = entrance
+                // Slide up 14 px worth of travel as it fades in.
+                translationY = (1f - entrance) * 14.dp.toPx()
+            }
+            .pressScale(interaction, pressedScale = 0.985f)
+            .clip(RoundedCornerShape(18.dp))
             .background(cardColor)
+            .height(IntrinsicSize.Min)
             .semantics {
                 if (selectedStateDescription != null) {
                     stateDescription = selectedStateDescription
                 }
             }
             .clickable(
-                interactionSource = interactionSource,
-                indication = ripple()
+                interactionSource = interaction,
+                indication = LocalIndication.current
             ) { actions.select(row.guid) }
     ) {
+        // The selection rail: grows out of the card edge instead of appearing instantly.
         Box(
             Modifier
-                .width(10.dp)
+                .width(railWidth)
                 .fillMaxHeight()
-        ) {
-            Row {
-                Spacer(Modifier.width(3.dp))
-                Box(
-                    Modifier
-                        .width(railWidth)
-                        .fillMaxHeight()
-                        .padding(vertical = 10.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
-        }
+                .padding(vertical = 10.dp)
+                .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
 
         Column(
             Modifier
                 .weight(1f)
-                .padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
+                .padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(row.remarks, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Paragraph), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    row.remarks,
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Paragraph),
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
                 if (doubleColumnDisplay) {
-                    IconButton(onClick = { actions.more(row.guid, row.profile) }, Modifier.size(36.dp)) {
-                        Icon(
-                            painterResource(R.drawable.ic_more_vert_24dp),
-                            stringResource(R.string.acc_more),
-                            Modifier.size(24.dp)
-                        )
+                    RowAction(R.drawable.ic_more_vert_24dp, R.string.acc_more) {
+                        actions.more(row.guid, row.profile)
                     }
                 } else {
-                    IconButton(onClick = { actions.share(row.guid, row.profile) }, Modifier.size(36.dp)) {
-                        Icon(
-                            painterResource(R.drawable.ic_share_24dp),
-                            stringResource(R.string.title_configuration_share),
-                            Modifier.size(24.dp)
-                        )
+                    RowAction(R.drawable.ic_share_24dp, R.string.title_configuration_share) {
+                        actions.share(row.guid, row.profile)
                     }
-                    IconButton(onClick = { actions.edit(row.guid, row.profile) }, Modifier.size(36.dp)) {
-                        Icon(
-                            painterResource(R.drawable.ic_edit_24dp),
-                            stringResource(R.string.acc_edit),
-                            Modifier.size(24.dp)
-                        )
+                    RowAction(R.drawable.ic_edit_24dp, R.string.acc_edit) {
+                        actions.edit(row.guid, row.profile)
                     }
-                    IconButton(onClick = { actions.remove(row.guid) }, Modifier.size(36.dp)) {
-                        Icon(
-                            painterResource(R.drawable.ic_delete_24dp),
-                            stringResource(R.string.acc_delete),
-                            Modifier.size(24.dp)
-                        )
+                    RowAction(R.drawable.ic_delete_24dp, R.string.acc_delete) {
+                        actions.remove(row.guid)
                     }
                 }
             }
@@ -416,12 +389,19 @@ private fun ServerListItem(
                 if (row.subscriptionBadge.isNotBlank()) {
                     Box(
                         Modifier
-                            .size(24.dp)
+                            .size(22.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)), Alignment.Center
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                        Alignment.Center
                     ) {
-                        Text(row.subscriptionBadge.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            row.subscriptionBadge.uppercase(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
+                    Spacer(Modifier.width(8.dp))
                 }
                 Text(
                     row.statistics,
@@ -432,24 +412,85 @@ private fun ServerListItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(row.typeDescription, style = MaterialTheme.typography.bodySmall, color = colorConfigType, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                // A fresh measurement pops in where the old one was, which is the only place in
-                // the row where a number changes on its own.
-                AnimatedContent(
-                    targetState = testResult,
-                    transitionSpec = {
-                        (fadeIn(appTween(MotionTokens.STANDARD_MS)) +
-                            scaleIn(appTween(MotionTokens.STANDARD_MS), initialScale = 0.85f)) togetherWith
-                            fadeOut(appTween(MotionTokens.QUICK_MS))
-                    },
-                    label = "PingValue"
-                ) { value ->
-                    Text(value, style = MaterialTheme.typography.bodySmall, color = if (row.testDelayMillis < 0L) colorPingRed else colorPing, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Protocol as a quiet chip rather than loose text.
+                Text(
+                    row.typeDescription,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(colorConfigType.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colorConfigType,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                PingValue(testResult = testResult, delayMillis = row.testDelayMillis)
             }
         }
+    }
+}
+
+/** Icon button with a press response, sized exactly like the old one. */
+@Composable
+private fun RowAction(iconRes: Int, descriptionRes: Int, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    IconButton(
+        onClick = onClick,
+        interactionSource = interaction,
+        modifier = Modifier
+            .size(36.dp)
+            .pressScale(interaction, pressedScale = 0.88f)
+    ) {
+        Icon(
+            painterResource(iconRes),
+            stringResource(descriptionRes),
+            Modifier.size(22.dp)
+        )
+    }
+}
+
+/**
+ * The delay reading.
+ *
+ * A new measurement fades and scales in, so a finished test is visible even if the user was not
+ * looking at that exact row.
+ */
+@Composable
+private fun PingValue(testResult: String, delayMillis: Long) {
+    val color by animateColorAsState(
+        targetValue = if (delayMillis < 0L) colorPingRed else colorPing,
+        animationSpec = appTween(),
+        label = "pingColor"
+    )
+    Crossfade(
+        targetState = testResult,
+        animationSpec = appTween(MotionTokens.STANDARD_MS),
+        label = "ping"
+    ) { value ->
+        val pop by animateFloatAsState(
+            targetValue = if (value.isBlank()) 0f else 1f,
+            animationSpec = appTween(MotionTokens.STANDARD_MS),
+            label = "pingPop"
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.graphicsLayer {
+                val scale = 0.9f + 0.1f * pop
+                scaleX = scale
+                scaleY = scale
+            }
+        )
     }
 }
 
