@@ -21,63 +21,15 @@ jobs:
     env:
       # The stable release aether's own release workflow built with; pinned so a new stable
       # release cannot change or break the release build on its own. Bump it together with
-      # the aether source ref below.
+      # the aether submodule.
       RUST_TOOLCHAIN: "1.98.1"
-      # Bump this to invalidate every native cache at once, for example after a repository
-      # rename left unusable entries behind.
-      CACHE_EPOCH: "v2"
-      # The native sources are fetched by the "Fetch native sources" step instead of git
-      # submodules, so the build does not depend on the gitlinks surviving a mirror, a
-      # re-upload or a fresh repository. Pin a tag or a commit here for a reproducible build
-      # and a cache key that does not move under you.
-      XRAY_REPO: "https://github.com/patterniha/AndroidLibXrayLite.git"
-      XRAY_REF: ""
-      HEVTUN_REPO: "https://github.com/heiher/hev-socks5-tunnel.git"
-      HEVTUN_REF: ""
-      AETHER_REPO: "https://github.com/CluvexStudio/aether.git"
-      AETHER_REF: "main"
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
       with:
+        submodules: 'recursive'
         fetch-depth: '0'
-
-    - name: Fetch native sources
-      env:
-        # An unauthenticated clone must fail loudly instead of asking for a username and
-        # dying with "could not read Username for 'https://github.com'".
-        GIT_TERMINAL_PROMPT: '0'
-        GCM_INTERACTIVE: 'never'
-      run: |
-        set -euo pipefail
-
-        fetch_repo () {
-          local dir="$1" repo="$2" ref="$3"
-          echo "::group::$dir"
-          rm -rf "$dir"
-          # Tags are needed by "git describe" below, so the clone is blobless rather than
-          # shallow; it is about as fast and keeps the full ref set.
-          git clone --filter=blob:none --recurse-submodules --shallow-submodules "$repo" "$dir"
-          if [ -n "$ref" ]; then
-            git -C "$dir" checkout --force "$ref"
-            git -C "$dir" submodule update --init --recursive
-          fi
-          echo "$dir: $(git -C "$dir" rev-parse HEAD)"
-          echo "::endgroup::"
-        }
-
-        fetch_repo AndroidLibXrayLite "$XRAY_REPO" "$XRAY_REF"
-        fetch_repo hev-socks5-tunnel "$HEVTUN_REPO" "$HEVTUN_REF"
-        fetch_repo aether "$AETHER_REPO" "$AETHER_REF"
-
-        # The caches below used to key off .git/modules/<name>/HEAD, which only exists for a
-        # submodule checkout; the resolved commits play the same role for a plain clone.
-        echo "HEVTUN_SHA=$(git -C hev-socks5-tunnel rev-parse HEAD)" >> $GITHUB_ENV
-        echo "AETHER_SHA=$(git -C aether rev-parse HEAD)" >> $GITHUB_ENV
-
-        test -f hev-socks5-tunnel/third-part/lwip/Android.mk
-        test -f aether/aether/Cargo.toml
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
@@ -96,38 +48,42 @@ jobs:
         \
             ndkVersion = "29.0.14206865"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
 
-    # The cache paths are relative on purpose. An absolute path makes actions/cache archive
-    # with "tar -P", so the entry carries the absolute workspace path inside it; after a
-    # repository rename the entry still restores "successfully" but unpacks under the old
-    # /home/runner/work/<old-name>/<old-name> path and the workspace stays empty.
+    # The cache path is relative on purpose. With an absolute path actions/cache archives
+    # with "tar -P", so the entry carries /home/runner/work/<repo>/<repo> inside it and
+    # after a repository rename it still restores "successfully" but unpacks under the old
+    # path, leaving the workspace empty. The -v2 in the key drops the entries that were
+    # already saved that way.
     - name: Restore cached libhevtun
       id: cache-libhevtun-restore
       uses: actions/cache/restore@v6
       with:
         path: libs
-        key: libhevtun-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+        key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
 
-    - name: Check libhevtun artifacts
-      id: hevtun
-      run: |
-        if [ -n "$(ls -A libs/arm64-v8a 2>/dev/null)" ]; then
-          echo "ready=true" >> $GITHUB_OUTPUT
-        else
-          echo "ready=false" >> $GITHUB_OUTPUT
-          echo "libhevtun is not on disk, building it"
-        fi
-
+    # No "if:" here: a step that is skipped by a cache hit which restored nothing usable
+    # only shows up as a failure much later, in the copy step. The check below looks at the
+    # files that are actually on disk instead.
     - name: Build libhevtun
-      if: steps.hevtun.outputs.ready != 'true'
+      id: libhevtun
       run: |
-        bash compile-hevtun.sh
+        set -euo pipefail
+        echo "cache-hit: ${{ steps.cache-libhevtun-restore.outputs.cache-hit }}"
+        ls -la libs 2>/dev/null || echo "(no libs/ directory)"
+        if [ -f libs/arm64-v8a/libhev-socks5-tunnel.so ] && [ -f libs/arm64-v8a/libhevsockstun.so ]; then
+          echo "built=false" >> $GITHUB_OUTPUT
+        else
+          bash compile-hevtun.sh
+          echo "built=true" >> $GITHUB_OUTPUT
+        fi
+        test -f libs/arm64-v8a/libhev-socks5-tunnel.so
+        test -f libs/arm64-v8a/libhevsockstun.so
 
     - name: Save libhevtun
-      if: steps.hevtun.outputs.ready != 'true' && steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+      if: steps.libhevtun.outputs.built == 'true' && steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
         path: libs
-        key: libhevtun-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+        key: libhevtun-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -140,41 +96,37 @@ jobs:
       uses: actions/cache/restore@v6
       with:
         path: libs-aether
-        key: libaether-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
+        key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('.git/modules/aether/HEAD') }}-${{ hashFiles('compile-aether.sh') }}
 
-    - name: Check libaether artifacts
-      id: aether
+    - name: Build libaether
+      id: libaether
       run: |
+        set -euo pipefail
+        echo "cache-hit: ${{ steps.cache-libaether-restore.outputs.cache-hit }}"
+        ls -la libs-aether 2>/dev/null || echo "(no libs-aether/ directory)"
         if [ -f libs-aether/arm64-v8a/libaether.so ] \
           && [ -f libs-aether/armeabi-v7a/libaether.so ] \
           && [ -f libs-aether/x86_64/libaether.so ]; then
-          echo "ready=true" >> $GITHUB_OUTPUT
+          echo "built=false" >> $GITHUB_OUTPUT
         else
-          echo "ready=false" >> $GITHUB_OUTPUT
-          echo "libaether is not on disk, building it"
+          bash compile-aether.sh
+          echo "built=true" >> $GITHUB_OUTPUT
         fi
 
-    - name: Build libaether
-      if: steps.aether.outputs.ready != 'true'
-      run: |
-        bash compile-aether.sh
-
     - name: Save libaether
-      if: steps.aether.outputs.ready != 'true' && steps.cache-libaether-restore.outputs.cache-hit != 'true'
+      if: steps.libaether.outputs.built == 'true' && steps.cache-libaether-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
         path: libs-aether
-        key: libaether-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
+        key: libaether-v2-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('.git/modules/aether/HEAD') }}-${{ hashFiles('compile-aether.sh') }}
 
-    - name: Copy native libraries
+    - name: Copy libhevtun
       run: |
         set -euo pipefail
-        test -d libs || { echo "libs/ is missing after the libhevtun stage"; exit 1; }
-        test -d libs-aether || { echo "libs-aether/ is missing after the libaether stage"; exit 1; }
-        mkdir -p V2rayNG/app/libs
-        cp -r libs/. V2rayNG/app/libs/
-        cp -r libs-aether/. V2rayNG/app/libs/
-        find V2rayNG/app/libs -name '*.so' | sort
+        mkdir -p ${{ github.workspace }}/V2rayNG/app/libs
+        cp -r ${{ github.workspace }}/libs/. ${{ github.workspace }}/V2rayNG/app/libs/
+        cp -r ${{ github.workspace }}/libs-aether/. ${{ github.workspace }}/V2rayNG/app/libs/
+        find ${{ github.workspace }}/V2rayNG/app/libs -name '*.so' | sort
 
     - name: Fetch AndroidLibXrayLite tag
       run: |
@@ -215,7 +167,7 @@ jobs:
         ./gradlew :app:testPlaystoreDebugUnitTest
         ./gradlew licenseFdroidReleaseReport
         ./gradlew assembleRelease -PpattngVersion="${{ inputs.release_tag }}" -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
-
+    
     - name: Upload arm64-v8a APK
       uses: actions/upload-artifact@v7
       if: ${{  success() }}
