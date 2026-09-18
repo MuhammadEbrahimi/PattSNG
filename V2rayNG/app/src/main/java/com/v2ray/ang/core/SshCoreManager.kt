@@ -72,7 +72,10 @@ object SshCoreManager {
         val current = session ?: return
         session = null
         current.stopped = true
-        lifecycle.execute { current.jsch?.disconnect() }
+        lifecycle.execute {
+            stopSocks()
+            current.jsch?.disconnect()
+        }
     }
 
     suspend fun awaitListening(timeoutMs: Long): Boolean =
@@ -188,18 +191,27 @@ object SshCoreManager {
                 fail(target, "SshCore: the server key $fingerprint does not match the pinned one", null)
                 return
             }
-socksServer = SshSocksServer(
-                session = currentSession,
-                port = AppConfig.PORT_SSH_SOCKS.toInt(),
+            socksServer = SshSocksServer(
+                session = jschSession,
+                port = socksPort,
                 bindAddress = AppConfig.LOOPBACK,
-                connectTimeoutMs = CONNECT_TIMEOUT_MS
+                connectTimeoutMs = CONNECT_TIMEOUT_MS,
             ).also { it.start() }
             LogUtil.i(
                 AppConfig.TAG,
                 "SshCore: tunnel up, SOCKS on ${AppConfig.LOOPBACK}:$socksPort via port ${serverPort(profile)}"
             )
         } catch (e: JSchException) {
+            stopSocks()
+            jschSession.disconnect()
             fail(target, "SshCore: failed to open the tunnel", e)
+            return
+        } catch (e: IOException) {
+            // The SOCKS listener could not bind, usually because a previous tunnel still holds the
+            // port; without it the profile would look connected while carrying no traffic.
+            stopSocks()
+            jschSession.disconnect()
+            fail(target, "SshCore: failed to bind the SOCKS listener on port $socksPort", e)
             return
         }
 
@@ -214,6 +226,7 @@ socksServer = SshSocksServer(
                 return
             }
         }
+        stopSocks()
         if (target.stopped || !release(target)) return
         LogUtil.e(AppConfig.TAG, "SshCore: the tunnel dropped on its own")
         target.onExit()
@@ -222,6 +235,12 @@ socksServer = SshSocksServer(
     private fun fail(target: Session, message: String, cause: Exception?) {
         if (cause != null) LogUtil.e(AppConfig.TAG, message, cause) else LogUtil.e(AppConfig.TAG, message)
         if (release(target)) target.onExit()
+    }
+
+    /** The listener outlives a dropped session, so it is closed on every path that ends a tunnel. */
+    private fun stopSocks() {
+        socksServer?.stop()
+        socksServer = null
     }
 
     @Synchronized
