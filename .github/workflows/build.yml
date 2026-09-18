@@ -23,9 +23,13 @@ jobs:
       # release cannot change or break the release build on its own. Bump it together with
       # the aether source ref below.
       RUST_TOOLCHAIN: "1.98.1"
+      # Bump this to invalidate every native cache at once, for example after a repository
+      # rename left unusable entries behind.
+      CACHE_EPOCH: "v2"
       # The native sources are fetched by the "Fetch native sources" step instead of git
       # submodules, so the build does not depend on the gitlinks surviving a mirror, a
-      # re-upload or a fresh repository. Pin a tag or a commit here for a reproducible build.
+      # re-upload or a fresh repository. Pin a tag or a commit here for a reproducible build
+      # and a cache key that does not move under you.
       XRAY_REPO: "https://github.com/patterniha/AndroidLibXrayLite.git"
       XRAY_REF: ""
       HEVTUN_REPO: "https://github.com/heiher/hev-socks5-tunnel.git"
@@ -42,7 +46,7 @@ jobs:
     - name: Fetch native sources
       env:
         # An unauthenticated clone must fail loudly instead of asking for a username and
-        # hanging or dying with "could not read Username for 'https://github.com'".
+        # dying with "could not read Username for 'https://github.com'".
         GIT_TERMINAL_PROMPT: '0'
         GCM_INTERACTIVE: 'never'
       run: |
@@ -92,24 +96,38 @@ jobs:
         \
             ndkVersion = "29.0.14206865"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
 
+    # The cache paths are relative on purpose. An absolute path makes actions/cache archive
+    # with "tar -P", so the entry carries the absolute workspace path inside it; after a
+    # repository rename the entry still restores "successfully" but unpacks under the old
+    # /home/runner/work/<old-name>/<old-name> path and the workspace stays empty.
     - name: Restore cached libhevtun
       id: cache-libhevtun-restore
       uses: actions/cache/restore@v6
       with:
-        path: ${{ github.workspace }}/libs
-        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+        path: libs
+        key: libhevtun-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+
+    - name: Check libhevtun artifacts
+      id: hevtun
+      run: |
+        if [ -n "$(ls -A libs/arm64-v8a 2>/dev/null)" ]; then
+          echo "ready=true" >> $GITHUB_OUTPUT
+        else
+          echo "ready=false" >> $GITHUB_OUTPUT
+          echo "libhevtun is not on disk, building it"
+        fi
 
     - name: Build libhevtun
-      if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+      if: steps.hevtun.outputs.ready != 'true'
       run: |
         bash compile-hevtun.sh
 
     - name: Save libhevtun
-      if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
+      if: steps.hevtun.outputs.ready != 'true' && steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
-        path: ${{ github.workspace }}/libs
-        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
+        path: libs
+        key: libhevtun-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.HEVTUN_SHA }}-${{ hashFiles('compile-hevtun.sh') }}
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -121,25 +139,42 @@ jobs:
       id: cache-libaether-restore
       uses: actions/cache/restore@v6
       with:
-        path: ${{ github.workspace }}/libs-aether
-        key: libaether-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
+        path: libs-aether
+        key: libaether-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
+
+    - name: Check libaether artifacts
+      id: aether
+      run: |
+        if [ -f libs-aether/arm64-v8a/libaether.so ] \
+          && [ -f libs-aether/armeabi-v7a/libaether.so ] \
+          && [ -f libs-aether/x86_64/libaether.so ]; then
+          echo "ready=true" >> $GITHUB_OUTPUT
+        else
+          echo "ready=false" >> $GITHUB_OUTPUT
+          echo "libaether is not on disk, building it"
+        fi
 
     - name: Build libaether
-      if: steps.cache-libaether-restore.outputs.cache-hit != 'true'
+      if: steps.aether.outputs.ready != 'true'
       run: |
         bash compile-aether.sh
 
     - name: Save libaether
-      if: steps.cache-libaether-restore.outputs.cache-hit != 'true'
+      if: steps.aether.outputs.ready != 'true' && steps.cache-libaether-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
-        path: ${{ github.workspace }}/libs-aether
-        key: libaether-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
+        path: libs-aether
+        key: libaether-${{ env.CACHE_EPOCH }}-${{ runner.os }}-${{ env.NDK_HOME }}-${{ env.RUST_TOOLCHAIN }}-${{ env.AETHER_SHA }}-${{ hashFiles('compile-aether.sh') }}
 
-    - name: Copy libhevtun
+    - name: Copy native libraries
       run: |
-        cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
-        cp -r ${{ github.workspace }}/libs-aether/. ${{ github.workspace }}/V2rayNG/app/libs/
+        set -euo pipefail
+        test -d libs || { echo "libs/ is missing after the libhevtun stage"; exit 1; }
+        test -d libs-aether || { echo "libs-aether/ is missing after the libaether stage"; exit 1; }
+        mkdir -p V2rayNG/app/libs
+        cp -r libs/. V2rayNG/app/libs/
+        cp -r libs-aether/. V2rayNG/app/libs/
+        find V2rayNG/app/libs -name '*.so' | sort
 
     - name: Fetch AndroidLibXrayLite tag
       run: |
