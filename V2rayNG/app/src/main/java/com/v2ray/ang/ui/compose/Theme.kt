@@ -35,106 +35,105 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 // ---------------------------------------------------------------------------
-// Brand palette
+// Brand palette: iced cyan on deep blue
 // ---------------------------------------------------------------------------
-// Amber is the action colour, Teal means "healthy", Violet is the cool accent used by
-// containers and highlights. These three are never overridden - not even by Dynamic Color -
-// so the app always looks like itself.
-private val BrandAmber = Color(0xFFFF7A18)
-private val BrandTeal = Color(0xFF00C08B)
-private val BrandViolet = Color(0xFF7C5CFF)
+// Cyan is the action colour, deep blue carries structure, sky blue marks metadata.
+// These are pinned even when Dynamic Color is on, so the app always looks like itself.
+private val IceCyan = Color(0xFF22D3EE)
+private val DeepBlue = Color(0xFF2563EB)
+private val SkyBlue = Color(0xFF60A5FA)
 
 private val LightColor = lightColorScheme(
-    primary = Color(0xFF12121A),
+    primary = Color(0xFF0B3A63),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE9E7F5),
-    onPrimaryContainer = Color(0xFF12121A),
-    secondary = BrandAmber,
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFFE6D2),
-    onSecondaryContainer = Color(0xFF3A1600),
-    tertiary = BrandTeal,
+    primaryContainer = Color(0xFFD6E9FA),
+    onPrimaryContainer = Color(0xFF032037),
+    secondary = IceCyan,
+    onSecondary = Color(0xFF00252E),
+    secondaryContainer = Color(0xFFCBF3FB),
+    onSecondaryContainer = Color(0xFF002630),
+    tertiary = DeepBlue,
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFBFF3E2),
-    onTertiaryContainer = Color(0xFF00241B),
-    error = Color(0xFFD5003C),
+    tertiaryContainer = Color(0xFFD8E3FF),
+    onTertiaryContainer = Color(0xFF00184A),
+    error = Color(0xFFD01A4B),
     errorContainer = Color(0xFFFFDAE2),
     onError = Color(0xFFFFFFFF),
     onErrorContainer = Color(0xFF3F0013),
-    background = Color(0xFFF6F5FA),
-    onBackground = Color(0xFF12121A),
-    surface = Color(0xFFF6F5FA),
-    onSurface = Color(0xFF12121A),
-    surfaceVariant = Color(0xFFE7E5F0),
-    onSurfaceVariant = Color(0xFF55525F),
-    outline = Color(0xFF8B8896),
-    outlineVariant = Color(0xFFD5D2DF),
-    inverseSurface = Color(0xFF1B1A22),
-    inverseOnSurface = Color(0xFFF2F0F7),
-    inversePrimary = Color(0xFFCFCBDC),
+    background = Color(0xFFF1F5FA),
+    onBackground = Color(0xFF0C1622),
+    surface = Color(0xFFF1F5FA),
+    onSurface = Color(0xFF0C1622),
+    surfaceVariant = Color(0xFFE0E8F2),
+    onSurfaceVariant = Color(0xFF4C5A6B),
+    outline = Color(0xFF7D8B9C),
+    outlineVariant = Color(0xFFCBD6E3),
+    inverseSurface = Color(0xFF16212E),
+    inverseOnSurface = Color(0xFFEEF3F9),
+    inversePrimary = Color(0xFF9DC7EC),
     scrim = Color(0xFF000000),
-    surfaceTint = BrandViolet,
+    surfaceTint = DeepBlue,
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFAF9FD),
-    surfaceContainer = Color(0xFFF1EFF7),
-    surfaceContainerHigh = Color(0xFFEAE8F2),
-    surfaceContainerHighest = Color(0xFFE3E0ED),
+    surfaceContainerLow = Color(0xFFF8FAFD),
+    surfaceContainer = Color(0xFFEDF2F8),
+    surfaceContainerHigh = Color(0xFFE5ECF4),
+    surfaceContainerHighest = Color(0xFFDDE6F0),
 )
 
 private val DarkColor = darkColorScheme(
-    primary = Color(0xFFEDEBF5),
-    onPrimary = Color(0xFF15141B),
-    primaryContainer = Color(0xFF2A2833),
-    onPrimaryContainer = Color(0xFFEDEBF5),
-    secondary = BrandAmber,
-    onSecondary = Color(0xFF2A0F00),
-    secondaryContainer = Color(0xFF5A2600),
-    onSecondaryContainer = Color(0xFFFFE6D2),
-    tertiary = BrandTeal,
-    onTertiary = Color(0xFF00281E),
-    tertiaryContainer = Color(0xFF00503C),
-    onTertiaryContainer = Color(0xFFBFF3E2),
+    primary = Color(0xFFBFE6F5),
+    onPrimary = Color(0xFF07121F),
+    primaryContainer = Color(0xFF16304A),
+    onPrimaryContainer = Color(0xFFD6EEF9),
+    secondary = IceCyan,
+    onSecondary = Color(0xFF00222B),
+    secondaryContainer = Color(0xFF07465A),
+    onSecondaryContainer = Color(0xFFCBF3FB),
+    tertiary = SkyBlue,
+    onTertiary = Color(0xFF041B3D),
+    tertiaryContainer = Color(0xFF123A79),
+    onTertiaryContainer = Color(0xFFD8E3FF),
     error = Color(0xFFFF6E8A),
-    errorContainer = Color(0xFF7A0025),
-    onError = Color(0xFF3F0013),
+    errorContainer = Color(0xFF6E0022),
+    onError = Color(0xFF39000F),
     onErrorContainer = Color(0xFFFFDAE2),
-    // Deep, almost-black canvas so the neon accents actually glow.
-    background = Color(0xFF0B0B0F),
-    onBackground = Color(0xFFEDEBF5),
-    surface = Color(0xFF0B0B0F),
-    onSurface = Color(0xFFEDEBF5),
-    surfaceVariant = Color(0xFF2B2A35),
-    onSurfaceVariant = Color(0xFFB7B3C4),
-    outline = Color(0xFF7A7788),
-    outlineVariant = Color(0xFF32313D),
-    inverseSurface = Color(0xFFEDEBF5),
-    inverseOnSurface = Color(0xFF15141B),
-    inversePrimary = Color(0xFF15141B),
+    // Deep navy canvas so the cyan actually reads as ice.
+    background = Color(0xFF050A14),
+    onBackground = Color(0xFFE4EEF7),
+    surface = Color(0xFF050A14),
+    onSurface = Color(0xFFE4EEF7),
+    surfaceVariant = Color(0xFF223041),
+    onSurfaceVariant = Color(0xFFA9BACC),
+    outline = Color(0xFF6C7E92),
+    outlineVariant = Color(0xFF243341),
+    inverseSurface = Color(0xFFE4EEF7),
+    inverseOnSurface = Color(0xFF07121F),
+    inversePrimary = Color(0xFF07121F),
     scrim = Color(0xFF000000),
-    surfaceTint = BrandViolet,
-    surfaceContainerLowest = Color(0xFF07070A),
-    surfaceContainerLow = Color(0xFF101017),
-    surfaceContainer = Color(0xFF15151E),
-    surfaceContainerHigh = Color(0xFF1C1C27),
-    surfaceContainerHighest = Color(0xFF242431),
+    surfaceContainerLowest = Color(0xFF03070E),
+    surfaceContainerLow = Color(0xFF0A1220),
+    surfaceContainer = Color(0xFF0E1827),
+    surfaceContainerHigh = Color(0xFF142132),
+    surfaceContainerHighest = Color(0xFF1B2B3E),
+    surfaceTint = SkyBlue,
 )
 
 // Semantic Colors
-val colorPing = BrandTeal
-val colorPingRed = Color(0xFFFF2D6F)
-val colorConfigType = BrandViolet
-val colorFabActive = BrandAmber
-val colorFabInactiveLight = Color(0xFF9B98A8)
-val colorFabInactiveDark = Color(0xFF5B5868)
-val dividerColorLight = Color(0xFFDFDCE9)
-val dividerColorDark = Color(0xFF2B2A35)
+val colorPing = Color(0xFF2DD4BF)
+val colorPingRed = Color(0xFFFB7185)
+val colorConfigType = SkyBlue
+val colorFabActive = IceCyan
+val colorFabInactiveLight = Color(0xFF93A3B5)
+val colorFabInactiveDark = Color(0xFF44566B)
+val dividerColorLight = Color(0xFFD5DFEA)
+val dividerColorDark = Color(0xFF223041)
 
-// Toast Colors 70%
-val toastNormalBgLight = Color(0xE61B1A22)
-val toastNormalBgDark = Color(0xE6262531)
-val toastSuccessBg = Color(0xE600A173)
-val toastErrorBg = Color(0xE6D5003C)
-val toastInfoBg = Color(0xE65B3FD6)
+// Toast Colors
+val toastNormalBgLight = Color(0xE6142132)
+val toastNormalBgDark = Color(0xE61B2B3E)
+val toastSuccessBg = Color(0xE6118C77)
+val toastErrorBg = Color(0xE6C21C45)
+val toastInfoBg = Color(0xE61D4ED8)
 val toastIconCircleBg = Color(0x33FFFFFF)
 val toastTextColor = Color.White
 
@@ -179,31 +178,23 @@ fun resolveDarkTheme(): Boolean {
 
 val LocalDarkTheme = compositionLocalOf { false }
 
-/**
- * Dynamic Color still personalises the neutrals from the wallpaper, but the brand accents are
- * pinned. Without this the app looked like a stock Material sample on Android 12+.
- */
+/** Dynamic Color may personalise neutrals, but brand accents stay pinned. */
 private fun ColorScheme.withBrandAccents(): ColorScheme = copy(
-    secondary = BrandAmber,
-    onSecondary = Color.White,
-    tertiary = BrandTeal,
-    onTertiary = Color.White,
-    surfaceTint = BrandViolet,
+    secondary = IceCyan,
+    onSecondary = Color(0xFF00222B),
+    tertiary = SkyBlue,
+    onTertiary = Color(0xFF041B3D),
+    surfaceTint = SkyBlue,
 )
 
-/**
- * Very large, soft corners. Cards, sheets, dialogs and menus all inherit these, which is most of
- * what makes the app read as a different product at a glance.
- */
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(10.dp),
-    small = RoundedCornerShape(16.dp),
-    medium = RoundedCornerShape(22.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(36.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(34.dp),
 )
 
-/** Tighter tracking and a heavier hierarchy on top of the Material scale. */
 private val AppTypography = Typography().let { base ->
     base.copy(
         headlineSmall = base.headlineSmall.copy(

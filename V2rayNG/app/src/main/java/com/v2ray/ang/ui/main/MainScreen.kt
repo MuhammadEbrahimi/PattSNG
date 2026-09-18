@@ -41,8 +41,9 @@ import kotlinx.coroutines.launch
 /**
  * Main screen.
  *
- * Layout was rebuilt around a connection hero at the top instead of a bottom bar, but every
- * action, dialog, drawer route, search hook and pager binding below is exactly what it was.
+ * Same state, same actions, same navigation as before. What changed is where things live: the
+ * connect control moved out of the bottom bar and into a hero panel directly under the header, so
+ * the primary control and the server list read as one surface instead of two opposite edges.
  */
 @Composable
 fun MainScreen(
@@ -141,6 +142,16 @@ fun MainScreen(
         QRCodeDialog(bitmap = shareQRCodeBitmap, onDismiss = { onAction(MainAction.DismissQRCodeDialog) })
     }
 
+    // Ambient wash behind everything, so the screen reads as one deep surface.
+    val ambient = Brush.radialGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (isDarkTheme) 0.20f else 0.10f),
+            MaterialTheme.colorScheme.background
+        ),
+        center = Offset(0f, 0f),
+        radius = 1600f
+    )
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -154,20 +165,9 @@ fun MainScreen(
         }
     ) {
         Scaffold(
-            contentWindowInsets = ScaffoldDefaults.contentWindowInsets,
+            modifier = Modifier.background(ambient),
             containerColor = Color.Transparent,
-            modifier = Modifier.background(
-                // Ambient wash behind everything: a cool tint at the top-left corner fading into
-                // the flat canvas. Purely decorative, drawn once, costs nothing.
-                Brush.radialGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceTint.copy(alpha = if (isDarkTheme) 0.18f else 0.10f),
-                        MaterialTheme.colorScheme.background,
-                    ),
-                    center = Offset(0f, 0f),
-                    radius = 1600f,
-                )
-            ),
+            contentWindowInsets = ScaffoldDefaults.contentWindowInsets,
             topBar = {
                 MainTopBar(
                     isLoading = isLoading,
@@ -209,8 +209,7 @@ fun MainScreen(
                     .padding(innerPadding)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // The connection hero: same two gestures as the old bottom bar
-                    // (tap panel = test current server, tap dial = start/stop).
+                    // The connect control, promoted from the bottom bar to the top of the content.
                     MainHeroPanel(
                         displayText = displayText,
                         isRunning = isRunning,
@@ -264,7 +263,7 @@ fun MainScreen(
                                 onRemoveServer = removeServer,
                                 contentPadding = PaddingValues(
                                     start = 0.dp,
-                                    top = 0.dp,
+                                    top = 2.dp,
                                     end = 0.dp,
                                     bottom = 32.dp
                                 )

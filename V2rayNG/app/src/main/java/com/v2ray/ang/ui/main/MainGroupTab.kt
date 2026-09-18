@@ -3,7 +3,6 @@ package com.v2ray.ang.ui.main
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +14,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,11 +41,11 @@ import com.v2ray.ang.ui.compose.pressScale
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Subscription group chips.
+ * Subscription groups as a rail of capsules.
  *
- * Behaviour is untouched: same groups, same indices, same click callback. Visually the tab row is
- * gone - groups are now standalone capsules that scroll horizontally, the active one filled with
- * the brand gradient and carrying its server count as a badge.
+ * Behaviour is untouched: same groups, same indices, same click callback. The tab row and its
+ * underline are gone; each group is now a standalone chip that fills with the brand gradient when
+ * it is the active one, and the rail scrolls itself to keep that chip in view.
  */
 @Composable
 fun GroupTabBar(
@@ -57,8 +58,8 @@ fun GroupTabBar(
     val selectedIndex = selectedTabIndex.coerceIn(0, groups.lastIndex)
     val listState = rememberLazyListState()
 
-    // Keep the active chip on screen when the pager is swiped.
-    LaunchedEffect(selectedIndex) {
+    // Follow the pager: swiping to a group brings its chip into view.
+    LaunchedEffect(selectedIndex, groups.size) {
         if (selectedIndex in groups.indices) {
             listState.animateScrollToItem(selectedIndex)
         }
@@ -71,18 +72,16 @@ fun GroupTabBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        groups.forEachIndexed { index, group ->
-            item(key = group.id.ifEmpty { "group-$index" }) {
-                val serverFlow = remember(group.id, mainViewModel) {
-                    mainViewModel.serversForGroup(group.id)
-                }
-                GroupChip(
-                    group = group,
-                    selected = index == selectedIndex,
-                    serverFlow = serverFlow,
-                    onClick = { onTabClick(index) }
-                )
+        itemsIndexed(items = groups, key = { _, group -> group.id }) { index, group ->
+            val serverFlow = remember(group.id, mainViewModel) {
+                mainViewModel.serversForGroup(group.id)
             }
+            GroupChip(
+                group = group,
+                selected = index == selectedIndex,
+                serverFlow = serverFlow,
+                onClick = { onTabClick(index) }
+            )
         }
     }
 }
@@ -95,63 +94,66 @@ private fun GroupChip(
     onClick: () -> Unit
 ) {
     val servers by serverFlow.collectAsStateWithLifecycle()
-    val count = servers.size
-
     val interaction = remember { MutableInteractionSource() }
+    val scheme = MaterialTheme.colorScheme
+
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) scheme.onSecondary else scheme.onSurfaceVariant,
+        animationSpec = appTween(),
+        label = "chipLabel"
+    )
+    val idleColor by animateColorAsState(
+        targetValue = if (selected) {
+            scheme.secondary
+        } else {
+            scheme.surfaceContainerHigh
+        },
+        animationSpec = appTween(),
+        label = "chipFill"
+    )
     val emphasis by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
         animationSpec = appTween(MotionTokens.STANDARD_MS),
         label = "chipEmphasis"
     )
-    val labelColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onSecondary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = appTween(),
-        label = "chipLabel"
-    )
-    val idleContainer = MaterialTheme.colorScheme.surfaceContainerHigh
-    val activeStart = MaterialTheme.colorScheme.secondary
-    val activeEnd = MaterialTheme.colorScheme.tertiary
+
+    // Active chip carries a cyan to blue wash; inactive ones stay a flat neutral capsule.
+    val fill = if (selected) {
+        Brush.horizontalGradient(listOf(scheme.secondary, scheme.tertiary))
+    } else {
+        Brush.horizontalGradient(listOf(idleColor, idleColor))
+    }
 
     Row(
         modifier = Modifier
-            .heightIn(min = 40.dp)
+            .heightIn(min = 44.dp)
             .graphicsLayer {
-                val scale = 1f + 0.04f * emphasis
+                val scale = 1f + 0.03f * emphasis
                 scaleX = scale
                 scaleY = scale
             }
             .pressScale(interaction, pressedScale = 0.94f)
             .clip(CircleShape)
-            .background(idleContainer)
-            .background(
-                Brush.horizontalGradient(
-                    listOf(
-                        activeStart.copy(alpha = emphasis),
-                        activeEnd.copy(alpha = emphasis * 0.9f)
-                    )
-                )
-            )
-            .clickable(
+            .background(fill)
+            .selectable(
+                selected = selected,
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = group.remarks,
             color = labelColor,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
+        // Server count lives inside the chip instead of inside the label text.
         if (group.id.isNotEmpty()) {
             Spacer(Modifier.width(8.dp))
             Box(
@@ -159,18 +161,18 @@ private fun GroupChip(
                     .clip(CircleShape)
                     .background(
                         if (selected) {
-                            MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.22f)
+                            scheme.onSecondary.copy(alpha = 0.18f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
+                            scheme.onSurfaceVariant.copy(alpha = 0.14f)
                         }
                     )
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = count.toString(),
+                    text = servers.size.toString(),
                     color = labelColor,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1
+                    style = MaterialTheme.typography.labelSmall
                 )
             }
         }

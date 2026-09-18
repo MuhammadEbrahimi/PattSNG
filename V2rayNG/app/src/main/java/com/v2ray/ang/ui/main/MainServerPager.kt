@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
@@ -310,13 +311,13 @@ private fun ServerCard(
     // Entrance: keyed on the guid, so scrolling and reordering never replay it.
     val entrance = rememberEntrance(row.guid, staggerDelay(index))
     val cardColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-        else MaterialTheme.colorScheme.surfaceContainerLow,
+        targetValue = if (isSelected) MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f)
+        else Color.Transparent,
         animationSpec = appTween(),
         label = "cardColor"
     )
     val railWidth by animateDpAsState(
-        targetValue = if (isSelected) 4.dp else 0.dp,
+        targetValue = if (isSelected) 3.dp else 0.dp,
         animationSpec = appTween(MotionTokens.EMPHASIZED_MS),
         label = "rail"
     )
@@ -324,14 +325,13 @@ private fun ServerCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .padding(horizontal = 10.dp, vertical = 2.dp)
             .graphicsLayer {
                 alpha = entrance
-                // Slide up 14 px worth of travel as it fades in.
-                translationY = (1f - entrance) * 14.dp.toPx()
+                translationY = (1f - entrance) * 10.dp.toPx()
             }
-            .pressScale(interaction, pressedScale = 0.985f)
-            .clip(RoundedCornerShape(18.dp))
+            .pressScale(interaction, pressedScale = 0.99f)
+            .clip(RoundedCornerShape(14.dp))
             .background(cardColor)
             .height(IntrinsicSize.Min)
             .semantics {
@@ -342,99 +342,95 @@ private fun ServerCard(
             .clickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current
-            ) { actions.select(row.guid) }
+            ) { actions.select(row.guid) },
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // The selection rail: grows out of the card edge instead of appearing instantly.
+        // Selection marker: a short bar that grows out of the left edge.
         Box(
             Modifier
                 .width(railWidth)
                 .fillMaxHeight()
-                .padding(vertical = 10.dp)
-                .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
-                .background(MaterialTheme.colorScheme.primary)
+                .padding(vertical = 12.dp)
+                .clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp))
+                .background(MaterialTheme.colorScheme.secondary)
         )
 
         Column(
             Modifier
                 .weight(1f)
-                .padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp)
+                .padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    row.remarks,
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Paragraph),
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (doubleColumnDisplay) {
-                    RowAction(R.drawable.ic_more_vert_24dp, R.string.acc_more) {
-                        actions.more(row.guid, row.profile)
-                    }
-                } else {
-                    RowAction(R.drawable.ic_share_24dp, R.string.title_configuration_share) {
-                        actions.share(row.guid, row.profile)
-                    }
-                    RowAction(R.drawable.ic_edit_24dp, R.string.acc_edit) {
-                        actions.edit(row.guid, row.profile)
-                    }
-                    RowAction(R.drawable.ic_delete_24dp, R.string.acc_delete) {
-                        actions.remove(row.guid)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                row.remarks,
+                style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Paragraph),
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            // One quiet metadata line: badge, protocol, address. No chips, no second card.
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (row.subscriptionBadge.isNotBlank()) {
-                    Box(
-                        Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                        Alignment.Center
-                    ) {
-                        Text(
-                            row.subscriptionBadge.uppercase(),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        row.subscriptionBadge.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        maxLines = 1
+                    )
+                    Text(
+                        "  \u00B7  ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
                 }
-                Text(
-                    row.statistics,
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Protocol as a quiet chip rather than loose text.
                 Text(
                     row.typeDescription,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(colorConfigType.copy(alpha = 0.12f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = colorConfigType,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                PingValue(testResult = testResult, delayMillis = row.testDelayMillis)
+                if (row.statistics.isNotBlank()) {
+                    Text(
+                        "  \u00B7  ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Text(
+                        row.statistics,
+                        Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
+
+        // Delay sits on the trailing edge, aligned down the whole list.
+        PingValue(testResult = testResult, delayMillis = row.testDelayMillis)
+        Spacer(modifier = Modifier.width(4.dp))
+
+        if (doubleColumnDisplay) {
+            RowAction(R.drawable.ic_more_vert_24dp, R.string.acc_more) {
+                actions.more(row.guid, row.profile)
+            }
+        } else {
+            RowAction(R.drawable.ic_share_24dp, R.string.title_configuration_share) {
+                actions.share(row.guid, row.profile)
+            }
+            RowAction(R.drawable.ic_edit_24dp, R.string.acc_edit) {
+                actions.edit(row.guid, row.profile)
+            }
+            RowAction(R.drawable.ic_delete_24dp, R.string.acc_delete) {
+                actions.remove(row.guid)
+            }
+        }
+        Spacer(modifier = Modifier.width(4.dp))
     }
 }
+
 
 /** Icon button with a press response, sized exactly like the old one. */
 @Composable

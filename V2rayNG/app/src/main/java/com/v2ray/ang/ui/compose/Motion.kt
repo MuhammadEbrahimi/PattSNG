@@ -52,12 +52,12 @@ object MotionTokens {
     const val STAGGER_MAX_MS = 320
 
     /**
-     * Expo-out: motion leaves immediately and glides a long way into place. This is the single
-     * biggest reason the new UI feels heavier and more cinematic than the old one.
+     * Expo-out: motion leaves fast and glides a long way into place. This is what gives the new
+     * surfaces their cinematic settle.
      */
     val easing: Easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
-    /** A snappier curve for press feedback, where a long glide would feel laggy. */
+    /** Tighter curve for press-level feedback, where a long glide would feel laggy. */
     val quickEasing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 }
 
@@ -120,7 +120,10 @@ fun rememberPulse(active: Boolean, durationMillis: Int = MotionTokens.PULSE_MS):
     return progress
 }
 
-/** Turns a 0f..1f linear ramp into a 0 -> 1 -> 0 breath. */
+/**
+ * Folds a 0f..1f linear ramp into a 0f..1f..0f breath, so a looping value can drive fades and
+ * scales without a visible jump when it wraps.
+ */
 fun breathOf(progress: Float): Float = 1f - abs(progress - 0.5f) * 2f
 
 /**
